@@ -1,0 +1,62 @@
+# Part II training parameters.
+# The baseline below is the sweep's starting point; `sweep` lists the axes varied around it.
+
+training:
+  algorithm: PPO          # PPO or DQN (brief permits either)
+  total_timesteps: 400000
+  n_envs: 8               # SubprocVecEnv; requires an `if __name__ == "__main__":` guard on Windows
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 512
+  gamma: 0.99
+  ent_coef: 0.005         # non-zero: guards against early policy collapse to a single action
+  net_arch: [64, 64]      # rubric J2 requires at least one hidden layer
+  seed: 0
+
+# Reduced-budget sweep for rubric J3 and report row R5. One axis varied at a time from the
+# baseline; winner re-run on 3 seeds before being trusted.
+sweep:
+  budget_timesteps: 100000
+  control_style: direct   # learns fastest, so it discriminates between configs soonest
+  axes:
+    learning_rate: [0.0001, 0.0003, 0.001]
+    n_steps: [512, 2048, 4096]
+    ent_coef: [0.0, 0.005, 0.01]
+    gamma: [0.95, 0.99]
+    net_arch: [[64, 64], [128, 128]]
+  confirm_seeds: [0, 1, 2]
+
+# Phase 1 must be clearable in roughly 20-30 seconds by a trained agent, because the video rubric
+# requires at least one visible phase progression. Difficulty lives in phases 2+.
+phases:
+  - spawners: 2
+    spawner_health: 3
+    enemy_health: 1
+    enemy_speed: 90        # pixels/second
+    spawn_interval: 3.0    # seconds
+  - spawners: 3
+    spawner_health: 4
+    enemy_health: 2
+    enemy_speed: 120
+    spawn_interval: 2.2
+  - spawners: 4
+    spawner_health: 5
+    enemy_health: 2
+    enemy_speed: 150
+    spawn_interval: 1.6
+
+player:
+  max_health: 5
+  speed: 220              # style 2: pixels/second
+  thrust: 400             # style 1: pixels/second^2
+  rotation_speed: 200     # degrees/second
+  drag: 0.9
+  shoot_cooldown: 0.25    # seconds
+  bullet_speed: 520
+  invulnerability_time: 0.6  # seconds after taking a hit
+
+evaluation:
+  deterministic: true
+  episodes: 5
+  fps: 60
+  show_observation_overlay: true  # the debug overlay; doubles as report figure and video moment

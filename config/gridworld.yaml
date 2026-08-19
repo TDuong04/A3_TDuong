@@ -1,0 +1,40 @@
+# Part I training parameters.
+# Rubric B3 requires epsilon decay to be config-driven — do not copy these values into code.
+
+training:
+  episodes: 3000
+  alpha: 0.1                    # learning rate
+  gamma: 0.95                   # discount factor
+  epsilon_start: 1.0
+  epsilon_end: 0.05
+  epsilon_decay_episodes: 2000  # linear decay window; epsilon held at epsilon_end afterwards
+  max_steps_per_episode: 300    # guards against non-terminating episodes
+  seed: 0
+  intrinsic_reward_strength: 0.0  # overridden by the level-6 experiment below
+
+# Task 5 (Level 6). Run the same level twice, once with each strength, and plot both curves.
+intrinsic_experiment:
+  level: 6
+  strengths: [0.0, 0.5]
+  episodes: 5000
+
+# Per-level overrides merged on top of `training`. Levels with monsters are stochastic and need
+# more episodes to average out; the cliff level needs a longer decay so SARSA's risk aversion has
+# time to appear.
+level_overrides:
+  1:
+    episodes: 4000
+    epsilon_decay_episodes: 3000
+  4:
+    episodes: 6000
+    epsilon_decay_episodes: 4000
+  5:
+    episodes: 8000
+    epsilon_decay_episodes: 5000
+    max_steps_per_episode: 400
+
+rendering:
+  cell_size: 56
+  fps: 30           # playback speed during visual rollout; training runs headless
+  show_policy_arrows: true
+  show_q_values: false
