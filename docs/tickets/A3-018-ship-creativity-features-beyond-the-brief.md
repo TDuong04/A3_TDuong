@@ -7,6 +7,7 @@ priority: P2
 rubric: Creativity
 points_at_risk: 5.0
 area: arena
+github: https://github.com/TDuong04/A3_TDuong/issues/18
 owner: unassigned
 blocks: []
 blocked_by: [A3-009]
@@ -40,3 +41,4 @@ Purely visual effects must never touch simulation state, or evaluation stops mat
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/18

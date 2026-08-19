@@ -7,6 +7,7 @@ priority: P0
 rubric: H
 points_at_risk: 2.5
 area: arena
+github: https://github.com/TDuong04/A3_TDuong/issues/10
 owner: unassigned
 blocks: [A3-011]
 blocked_by: [A3-008]
@@ -41,3 +42,4 @@ The observation layout is fully specified in the `arena/observation.py` docstrin
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/10

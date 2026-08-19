@@ -7,6 +7,7 @@ priority: P0
 rubric: I
 points_at_risk: 4.0
 area: eval
+github: https://github.com/TDuong04/A3_TDuong/issues/12
 owner: unassigned
 blocks: [A3-014, A3-015]
 blocked_by: [A3-011]
@@ -40,3 +41,4 @@ If an agent cannot clear phase 1, tune phase 1 in config rather than adding time
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/12

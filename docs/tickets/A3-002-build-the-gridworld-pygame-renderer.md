@@ -7,6 +7,7 @@ priority: P0
 rubric: A1
 points_at_risk: 2.0
 area: gridworld
+github: https://github.com/TDuong04/A3_TDuong/issues/2
 owner: unassigned
 blocks: [A3-015]
 blocked_by: [A3-001]
@@ -40,3 +41,4 @@ Files: `gridworld/render.py`. Nothing here may be imported from `env.py`.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/2

@@ -7,6 +7,7 @@ priority: P0
 rubric: J
 points_at_risk: 3.0
 area: training
+github: https://github.com/TDuong04/A3_TDuong/issues/11
 owner: unassigned
 blocks: [A3-012, A3-013]
 blocked_by: [A3-010]
@@ -38,3 +39,4 @@ Files: `train/train_arena.py`, `train/callbacks.py`.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/11

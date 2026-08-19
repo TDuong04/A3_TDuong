@@ -7,6 +7,7 @@ priority: P0
 rubric: A
 points_at_risk: 2.0
 area: gridworld
+github: https://github.com/TDuong04/A3_TDuong/issues/1
 owner: unassigned
 blocks: [A3-002, A3-003]
 blocked_by: []
@@ -42,3 +43,4 @@ Files: `gridworld/env.py`. Constants already frozen in `gridworld/constants.py`.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/1

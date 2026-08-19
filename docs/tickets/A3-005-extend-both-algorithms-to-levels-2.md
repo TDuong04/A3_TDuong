@@ -7,6 +7,7 @@ priority: P0
 rubric: D
 points_at_risk: 3.0
 area: gridworld
+github: https://github.com/TDuong04/A3_TDuong/issues/5
 owner: unassigned
 blocks: [A3-006, A3-007]
 blocked_by: [A3-003, A3-004]
@@ -35,3 +36,4 @@ Depends on the state key from A3-001 being correct.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/5

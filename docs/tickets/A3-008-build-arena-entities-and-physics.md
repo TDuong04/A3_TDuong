@@ -7,6 +7,7 @@ priority: P0
 rubric: G
 points_at_risk: 4.5
 area: arena
+github: https://github.com/TDuong04/A3_TDuong/issues/8
 owner: unassigned
 blocks: [A3-009, A3-010]
 blocked_by: []
@@ -40,3 +41,4 @@ Files: `arena/entities.py`. Tunables live in `config/arena.yaml`.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/8

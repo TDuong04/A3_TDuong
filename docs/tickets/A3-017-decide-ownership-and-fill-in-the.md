@@ -7,6 +7,7 @@ priority: P1
 rubric: R
 points_at_risk: 2.5
 area: infra
+github: https://github.com/TDuong04/A3_TDuong/issues/17
 owner: unassigned
 blocks: []
 blocked_by: []
@@ -35,3 +36,4 @@ Part II is roughly half the marks and too large for one person — training, eva
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/17

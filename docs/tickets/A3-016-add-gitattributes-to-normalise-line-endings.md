@@ -7,6 +7,7 @@ priority: P2
 rubric: none
 points_at_risk: 0.0
 area: infra
+github: https://github.com/TDuong04/A3_TDuong/issues/16
 owner: unassigned
 blocks: []
 blocked_by: []
@@ -35,3 +36,4 @@ Do this before anyone else clones the repo.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/16

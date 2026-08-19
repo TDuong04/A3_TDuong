@@ -7,6 +7,7 @@ priority: P0
 rubric: F
 points_at_risk: 3.0
 area: gridworld
+github: https://github.com/TDuong04/A3_TDuong/issues/7
 owner: unassigned
 blocks: [A3-014]
 blocked_by: [A3-005]
@@ -37,3 +38,4 @@ Config block `intrinsic_experiment` already exists in `config/gridworld.yaml`.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/7

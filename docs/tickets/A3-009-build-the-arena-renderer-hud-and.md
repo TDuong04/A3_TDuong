@@ -7,6 +7,7 @@ priority: P0
 rubric: G
 points_at_risk: 4.5
 area: arena
+github: https://github.com/TDuong04/A3_TDuong/issues/9
 owner: unassigned
 blocks: [A3-018]
 blocked_by: [A3-008]
@@ -39,3 +40,4 @@ Files: `arena/render.py`. Called only from `ArenaEnv.render()`.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/9

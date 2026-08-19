@@ -7,6 +7,7 @@ priority: P1
 rubric: none
 points_at_risk: 0.0
 area: gridworld
+github: https://github.com/TDuong04/A3_TDuong/issues/6
 owner: unassigned
 blocks: []
 blocked_by: [A3-005]
@@ -40,3 +41,4 @@ Stochastic levels need more episodes; overrides are already in `config/gridworld
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/6

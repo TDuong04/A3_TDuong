@@ -7,6 +7,7 @@ priority: P0
 rubric: C
 points_at_risk: 3.0
 area: gridworld
+github: https://github.com/TDuong04/A3_TDuong/issues/4
 owner: unassigned
 blocks: [A3-005]
 blocked_by: [A3-003]
@@ -39,3 +40,4 @@ Files: `gridworld/algorithms.py`, `eval/play_gridworld.py` (`--compare` mode).
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/4

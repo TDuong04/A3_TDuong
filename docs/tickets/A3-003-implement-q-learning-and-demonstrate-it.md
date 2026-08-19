@@ -7,6 +7,7 @@ priority: P0
 rubric: B
 points_at_risk: 2.5
 area: gridworld
+github: https://github.com/TDuong04/A3_TDuong/issues/3
 owner: unassigned
 blocks: [A3-004, A3-005]
 blocked_by: [A3-001]
@@ -37,3 +38,4 @@ Files: `gridworld/algorithms.py`, `train/train_gridworld.py`.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/3

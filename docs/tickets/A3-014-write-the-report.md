@@ -7,6 +7,7 @@ priority: P0
 rubric: R
 points_at_risk: 2.5
 area: report
+github: https://github.com/TDuong04/A3_TDuong/issues/14
 owner: unassigned
 blocks: []
 blocked_by: [A3-007, A3-012]
@@ -40,3 +41,4 @@ Figures come from `results/`. Every claim needs a seed or a run behind it.
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/14

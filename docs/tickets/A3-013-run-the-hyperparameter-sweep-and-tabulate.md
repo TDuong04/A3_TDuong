@@ -7,6 +7,7 @@ priority: P1
 rubric: J3
 points_at_risk: 3.0
 area: training
+github: https://github.com/TDuong04/A3_TDuong/issues/13
 owner: unassigned
 blocks: []
 blocked_by: [A3-011]
@@ -36,3 +37,4 @@ Delegate to the `sweep-runner` agent; it keeps the SB3 output out of the main co
 ## Log
 
 - 2026-08-19 — created during project setup
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/13
