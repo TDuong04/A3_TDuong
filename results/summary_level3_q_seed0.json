@@ -1,0 +1,66 @@
+{
+  "level": 3,
+  "algo": "q",
+  "seed": 0,
+  "episodes": 3000,
+  "alpha": 0.1,
+  "gamma": 0.95,
+  "epsilon_start": 1.0,
+  "epsilon_end": 0.05,
+  "epsilon_decay_episodes": 2000,
+  "max_steps_per_episode": 300,
+  "greedy_steps": 34,
+  "bfs_optimum_steps": 34,
+  "greedy_collected": 4,
+  "n_collectibles": 4,
+  "greedy_return": 4.0,
+  "greedy_died": false,
+  "greedy_truncated": false,
+  "solved": true,
+  "collection_order": [
+    {
+      "tile": "A",
+      "cell": [
+        6,
+        1
+      ],
+      "step": 7
+    },
+    {
+      "tile": "K",
+      "cell": [
+        6,
+        9
+      ],
+      "step": 23
+    },
+    {
+      "tile": "A",
+      "cell": [
+        3,
+        9
+      ],
+      "step": 26
+    },
+    {
+      "tile": "C",
+      "cell": [
+        9,
+        7
+      ],
+      "step": 34
+    }
+  ],
+  "collection_order_text": "A(6,1)@7 -> K(6,9)@23 -> A(3,9)@26 -> C(9,7)@34",
+  "key_precedes_chest": true,
+  "optimal": true,
+  "stochastic_level": false,
+  "mean_return_last_100": 4.0,
+  "mean_steps_last_100": 35.85,
+  "artifacts": {
+    "history_csv": "results/history_level3_q_seed0.csv",
+    "q_table": "results/qtable_level3_q_seed0.npz",
+    "training_curve": "results/curve_level3_q_seed0.png",
+    "policy_arrows": "results/policy_level3_q_seed0.png"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "level": 2,
+  "algo": "sarsa",
+  "seed": 1,
+  "episodes": 3000,
+  "alpha": 0.1,
+  "gamma": 0.95,
+  "epsilon_start": 1.0,
+  "epsilon_end": 0.05,
+  "epsilon_decay_episodes": 2000,
+  "max_steps_per_episode": 300,
+  "greedy_steps": 25,
+  "bfs_optimum_steps": 25,
+  "greedy_collected": 5,
+  "n_collectibles": 5,
+  "greedy_return": 5.0,
+  "greedy_died": false,
+  "greedy_truncated": false,
+  "solved": true,
+  "collection_order": [
+    {
+      "tile": "A",
+      "cell": [
+        3,
+        2
+      ],
+      "step": 5
+    },
+    {
+      "tile": "K",
+      "cell": [
+        8,
+        1
+      ],
+      "step": 11
+    },
+    {
+      "tile": "A",
+      "cell": [
+        8,
+        7
+      ],
+      "step": 17
+    },
+    {
+      "tile": "C",
+      "cell": [
+        5,
+        8
+      ],
+      "step": 21
+    },
+    {
+      "tile": "A",
+      "cell": [
+        1,
+        8
+      ],
+      "step": 25
+    }
+  ],
+  "collection_order_text": "A(3,2)@5 -> K(8,1)@11 -> A(8,7)@17 -> C(5,8)@21 -> A(1,8)@25",
+  "key_precedes_chest": true,
+  "optimal": true,
+  "stochastic_level": false,
+  "mean_return_last_100": 5.0,
+  "mean_steps_last_100": 26.77,
+  "artifacts": {
+    "history_csv": "results/history_level2_sarsa_seed1.csv",
+    "q_table": "results/qtable_level2_sarsa_seed1.npz",
+    "training_curve": "results/curve_level2_sarsa_seed1.png",
+    "policy_arrows": "results/policy_level2_sarsa_seed1.png"
+  }
+}

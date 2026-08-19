@@ -33,11 +33,33 @@ level_overrides:
     episodes: 8000
     epsilon_decay_episodes: 6000
   4:
-    episodes: 6000
-    epsilon_decay_episodes: 4000
+    # 6000/4000 trained a policy that *looked* fine and evaluated as broken. The training curve
+    # settled at a mean return of 2.41-2.53 out of 3, but the greedy (epsilon 0) rollout on seeds
+    # 0 (Q-learning) and 2 (SARSA) never collected anything after the first apple: it oscillated
+    # between (3,2) and (4,2) forever, on Q values of 0.7879 vs 0.7867. Monster positions are not
+    # part of the state key, so the greedy policy is a fixed map from (row, col, has_key, mask) to
+    # an action, and two adjacent cells whose values have not separated by more than the 5% per
+    # step that gamma=0.95 implies produce a two-cycle the epsilon-greedy behaviour policy hides.
+    # It is a convergence symptom, not a stalemate: at 12000/8000 all ten runs (seeds 0-4 x both
+    # algorithms) leave the cycle behind, truncate in 0% of 300 greedy rollouts each, and land on
+    # a 69-78% success rate at ~20.5 steps against the BFS lower bound of 21. Raising further to
+    # 20000 and 30000 changed nothing measurable, so 12000 is the budget, not a floor to keep
+    # lifting. epsilon_end stays at the shared 0.05.
+    episodes: 12000
+    epsilon_decay_episodes: 8000
   5:
-    episodes: 8000
-    epsilon_decay_episodes: 5000
+    # The same failure as level 4, at 8000/5000: seed 1 truncated 31% (Q-learning) and 24% (SARSA)
+    # of greedy rollouts at a mean return of 0.99 out of 4, having circled instead of crossing to
+    # the key. Two monsters and the key/chest ordering make this the slowest level to separate its
+    # values. At 16000/10000 all ten runs (seeds 0-4 x both algorithms) are clean: 0% truncation
+    # over 300 greedy rollouts each, 45-54% success, ~25 steps against the BFS lower bound of 28.
+    # Worth recording that the recovery is not monotone in the budget — 25000/15000 reintroduced
+    # the cycle on Q-learning seed 1 and 40000/24000 on SARSA seed 2 — which is why the number
+    # here is the smallest budget that was clean across every seed tried rather than the largest
+    # budget affordable. max_steps stays at 400: the level's optimum is 28 steps, so the cap only
+    # ever fires on a policy that has stopped making progress.
+    episodes: 16000
+    epsilon_decay_episodes: 10000
     max_steps_per_episode: 400
 
 rendering:

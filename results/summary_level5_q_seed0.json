@@ -1,0 +1,50 @@
+{
+  "level": 5,
+  "algo": "q",
+  "seed": 0,
+  "episodes": 16000,
+  "alpha": 0.1,
+  "gamma": 0.95,
+  "epsilon_start": 1.0,
+  "epsilon_end": 0.05,
+  "epsilon_decay_episodes": 10000,
+  "max_steps_per_episode": 400,
+  "greedy_steps": 19,
+  "bfs_optimum_steps": 28,
+  "greedy_collected": 2,
+  "n_collectibles": 4,
+  "greedy_return": 1.0,
+  "greedy_died": true,
+  "greedy_truncated": false,
+  "solved": false,
+  "collection_order": [
+    {
+      "tile": "K",
+      "cell": [
+        6,
+        1
+      ],
+      "step": 7
+    },
+    {
+      "tile": "A",
+      "cell": [
+        8,
+        2
+      ],
+      "step": 10
+    }
+  ],
+  "collection_order_text": "K(6,1)@7 -> A(8,2)@10",
+  "key_precedes_chest": null,
+  "optimal": false,
+  "stochastic_level": true,
+  "mean_return_last_100": 3.25,
+  "mean_steps_last_100": 26.69,
+  "artifacts": {
+    "history_csv": "results/history_level5_q_seed0.csv",
+    "q_table": "results/qtable_level5_q_seed0.npz",
+    "training_curve": "results/curve_level5_q_seed0.png",
+    "policy_arrows": "results/policy_level5_q_seed0.png"
+  }
+}

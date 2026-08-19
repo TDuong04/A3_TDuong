@@ -1,0 +1,58 @@
+{
+  "level": 4,
+  "algo": "sarsa",
+  "seed": 1,
+  "episodes": 12000,
+  "alpha": 0.1,
+  "gamma": 0.95,
+  "epsilon_start": 1.0,
+  "epsilon_end": 0.05,
+  "epsilon_decay_episodes": 8000,
+  "max_steps_per_episode": 300,
+  "greedy_steps": 22,
+  "bfs_optimum_steps": 21,
+  "greedy_collected": 3,
+  "n_collectibles": 3,
+  "greedy_return": 3.0,
+  "greedy_died": false,
+  "greedy_truncated": false,
+  "solved": true,
+  "collection_order": [
+    {
+      "tile": "A",
+      "cell": [
+        5,
+        2
+      ],
+      "step": 7
+    },
+    {
+      "tile": "A",
+      "cell": [
+        9,
+        8
+      ],
+      "step": 17
+    },
+    {
+      "tile": "A",
+      "cell": [
+        5,
+        9
+      ],
+      "step": 22
+    }
+  ],
+  "collection_order_text": "A(5,2)@7 -> A(9,8)@17 -> A(5,9)@22",
+  "key_precedes_chest": null,
+  "optimal": false,
+  "stochastic_level": true,
+  "mean_return_last_100": 2.54,
+  "mean_steps_last_100": 21.59,
+  "artifacts": {
+    "history_csv": "results/history_level4_sarsa_seed1.csv",
+    "q_table": "results/qtable_level4_sarsa_seed1.npz",
+    "training_curve": "results/curve_level4_sarsa_seed1.png",
+    "policy_arrows": "results/policy_level4_sarsa_seed1.png"
+  }
+}
