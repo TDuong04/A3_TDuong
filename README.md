@@ -68,6 +68,24 @@ results/     training curves, Q-tables, screenshots for the report
 report/      report source and exported PDF
 ```
 
+## Tickets
+
+The backlog lives in [`docs/tickets/`](docs/tickets/INDEX.md) — one markdown file per ticket, with
+`INDEX.md` as the board. Every remaining piece of work is already tracked there, covering all 40
+rubric points, with dependencies recorded so you can see what is unblocked right now.
+
+Priority is derived from points at risk, not preference: P0 blocks a rubric row worth 3 or more
+points or blocks someone else's work, P1 is a smaller row or degraded evidence, P2 is quality, P3 is
+optional.
+
+To raise, update or close a ticket, ask the `ticket-bot` agent rather than editing files directly —
+it allocates ids, checks for duplicates, keeps the log honest and regenerates the board. If you are
+editing by hand, copy `TEMPLATE.md`, keep every frontmatter field, append to the ticket's `## Log`,
+and update `INDEX.md` to match.
+
+Closing a ticket requires its acceptance criteria to actually be met. If they are not, say what is
+outstanding and leave it open.
+
 ## Working rules
 
 **Never edit `gridworld/constants.py` or `arena/constants.py`.** They encode values fixed by the
