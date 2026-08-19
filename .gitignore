@@ -1,0 +1,29 @@
+# Environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Scratch
+scratch/
+*.tmp
+
+# Local AI tooling — not part of the submission
+.claude/
+CLAUDE.md
+
+# NOTE: models/ logs/ and results/ are deliberately NOT ignored.
+# The brief requires saved models and TensorBoard logs inside the submitted zip.
+# Do not add them here.
