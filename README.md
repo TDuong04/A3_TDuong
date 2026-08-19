@@ -78,10 +78,21 @@ Priority is derived from points at risk, not preference: P0 blocks a rubric row 
 points or blocks someone else's work, P1 is a smaller row or degraded evidence, P2 is quality, P3 is
 optional.
 
+Every ticket is mirrored to a [GitHub issue](https://github.com/TDuong04/A3_TDuong/issues), labelled
+by priority, type and area, with dependencies cross-linked. The ticket files remain the source of
+truth; the issues exist for whoever prefers the web UI.
+
 To raise, update or close a ticket, ask the `ticket-bot` agent rather than editing files directly —
 it allocates ids, checks for duplicates, keeps the log honest and regenerates the board. If you are
 editing by hand, copy `TEMPLATE.md`, keep every frontmatter field, append to the ticket's `## Log`,
-and update `INDEX.md` to match.
+then run:
+
+```powershell
+python scripts/sync_tickets.py            # regenerate the board
+python scripts/sync_tickets.py --github   # also open issues for any new tickets
+```
+
+The script never re-creates an issue for a ticket that already has one, so it is safe to re-run.
 
 Closing a ticket requires its acceptance criteria to actually be met. If they are not, say what is
 outstanding and leave it open.
