@@ -1,4 +1,4 @@
-"""Tabular control for the gridworld: Q-learning now, SARSA next (A3-004).
+"""Tabular control for the gridworld: Q-learning (A3-003) and SARSA (A3-004).
 
 Both algorithms live in this one module and share `select_action` and the `LinearEpsilon` schedule
 from `common.schedules`. That sharing is deliberate: rubric C2 requires SARSA to use the same
@@ -270,17 +270,78 @@ def sarsa(
     rng: np.random.Generator | None = None,
     q_table: QTable | None = None,
 ) -> TrainingResult:
-    """On-policy TD control — NOT YET IMPLEMENTED, owned by ticket A3-004.
+    """On-policy TD control. Same signature, same config, same schedule as `q_learning`.
 
-    The place is marked deliberately rather than left absent. When it lands it must reuse
-    `select_action`, `make_q_table` and `epsilon_schedule` above verbatim; the only line that may
-    differ from `q_learning` is the target:
+    Every piece of shared machinery is *called*, not copied: `make_q_table`, `epsilon_schedule` and
+    `select_action` are the same objects Q-learning uses, which is how rubric C2's "same exploration
+    schedule" is provable by reading one function rather than by diffing two loops. The only
+    difference from `q_learning` is the bootstrap term.
 
-        target = reward if terminated else reward + config.gamma * q[next_state][next_action]
+    The loop shape is the give-away. Q-learning can update as soon as it has seen `s'`, because its
+    target only needs the best value available there. SARSA's target needs the action the behaviour
+    policy will *actually* take, so `next_action` is drawn at the end of each step from `q[s']`
+    under the same epsilon, used in the update, and then carried into the following iteration as
+    the action to execute. No action is ever selected twice, which is what makes the update
+    on-policy: the value bootstrapped from is the value of a choice the agent went on to make.
 
-    where `next_action` is selected *before* the update and carried into the following step.
+    `float(q[next_state][next_action])` and never a max. Taking the max here would silently turn
+    this function into a second copy of `q_learning`, the two policies on level 1 would coincide,
+    and the C3 comparison would have nothing to show.
+
+    Terminal handling matches Q-learning exactly, and for the same reason: `info["terminated"]`
+    means the game ended, so `target = r` with no successor term. A truncation is only the step cap
+    firing — the successor state still has value and still deserves an action drawn from it — so a
+    truncated transition keeps its bootstrap.
     """
-    raise NotImplementedError("SARSA is ticket A3-004; see the docstring for the contract")
+    rng = make_rng(config.seed) if rng is None else rng
+    schedule = epsilon_schedule(config)
+    q = make_q_table() if q_table is None else q_table
+    history: list[EpisodeRecord] = []
+
+    for episode in range(config.episodes):
+        epsilon = schedule(episode)
+        state = env.reset()
+        # The first action is chosen before the loop: SARSA always steps with an action it has
+        # already committed to, and from here on every action is the `next_action` of the update
+        # that preceded it.
+        action = select_action(q[state], epsilon, rng)
+        total_return = 0.0
+
+        while True:
+            next_state, reward, done, info = env.step(action)
+            total_return += reward
+
+            # On-policy: draw a' now, from the same epsilon-greedy policy, and bootstrap from its
+            # value. On a real ending there is no a' to take and the target is r alone.
+            if info["terminated"]:
+                next_action = None
+                target = reward
+            else:
+                next_action = select_action(q[next_state], epsilon, rng)
+                target = reward + config.gamma * float(q[next_state][next_action])
+
+            q[state][action] += config.alpha * (target - q[state][action])
+
+            if done:
+                break
+
+            # Carry the action forward: the update above already committed to it.
+            state, action = next_state, next_action
+
+        history.append(
+            EpisodeRecord(
+                episode=episode,
+                total_return=total_return,
+                steps=info["steps"],
+                died=bool(info["died"]),
+                collected=int(info["collected"]),
+                epsilon=epsilon,
+            )
+        )
+
+    return TrainingResult(
+        algo="sarsa", level=env.level_index, q_table=q, history=history, config=config
+    )
 
 
 # --- verification helpers: is the learned policy actually optimal? ------------------------------
@@ -315,6 +376,24 @@ def greedy_rollout(
     the agent never visited has an all-zero row where every action ties. That is the honest
     behaviour to demonstrate — silently falling back to `argmax` here would flatter the policy.
     """
+    return policy_rollout(env, q_table, epsilon=0.0, rng=rng)
+
+
+def policy_rollout(
+    env: GridWorld,
+    q_table: QTable,
+    *,
+    epsilon: float = 0.0,
+    rng: np.random.Generator | None = None,
+) -> Rollout:
+    """One episode under the epsilon-greedy policy the table defines. `epsilon = 0` is greedy.
+
+    A non-zero epsilon exists for the C3 comparison (A3-004). SARSA's whole claim is about the
+    policy it *follows*, exploration included, so "how often does this table walk into the fire"
+    can only be measured honestly at the epsilon the agent actually converged under. Measuring it
+    at epsilon 0 answers a different question — one where the cliff route is simply the shorter of
+    two safe paths and both algorithms look identical.
+    """
     rng = make_rng(0) if rng is None else rng
     state = env.reset()
     states: list[State] = [state]
@@ -322,7 +401,7 @@ def greedy_rollout(
     total_return = 0.0
 
     while True:
-        action = select_action(q_table[state], 0.0, rng)
+        action = select_action(q_table[state], epsilon, rng)
         state, reward, done, info = env.step(action)
         actions.append(action)
         states.append(state)

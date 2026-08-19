@@ -16,6 +16,12 @@ level of a single update, with a successor state whose four action-values are de
 different. That distinction is load-bearing for A3-004: when SARSA lands in this same module, the
 suite has to be able to prove the two algorithms are not the same code.
 
+SARSA has since landed, and the C1/C2 section near the bottom is the mirror image of the C section
+above it — same successor rows, opposite expectations. Q-learning's update must equal the `max`
+target and must not vary with the action taken; SARSA's must equal the `Q[s'][a']` target and must
+vary. Neither set can pass against the other algorithm's update rule, so a copy-paste that
+collapses the two into one implementation cannot leave the suite green.
+
 The last test is the B5 demonstration in miniature: train briefly on level 0 and check the greedy
 path length against an independently computed BFS optimum, rather than against a number typed here.
 """
@@ -24,6 +30,7 @@ from __future__ import annotations
 
 import ast
 import tempfile
+from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -127,9 +134,77 @@ class Transition(NamedTuple):
     value: float
 
 
+class SarsaTransition(NamedTuple):
+    """The same recording for SARSA, which needs one more field than Q-learning does.
+
+    Q-learning's target is a property of `s'` alone, so naming the action taken *out of* `s` is
+    enough to state what the update should not have been. SARSA's target is `Q[s'][a']`, so the test
+    cannot predict anything without knowing `a'` — the action drawn at the successor state and
+    carried into the next step. That is precisely the quantity that makes the update on-policy, so
+    it is recorded rather than inferred.
+    """
+
+    config: TabularConfig
+    action: int
+    next_action: int | None
+    value: float
+
+
+class RecordingRng:
+    """A `np.random.Generator` proxy that remembers every action handed back to `select_action`.
+
+    Reproducing the draw order by hand (`random()`, then `integers()`, twice) would re-implement
+    `select_action` inside the test file and go stale the moment the selection logic is touched.
+    Wrapping the generator instead records what was actually chosen, in order, whichever branch
+    produced it: `integers` for an exploratory draw, `choice` for a greedy one.
+    """
+
+    def __init__(self, rng: np.random.Generator) -> None:
+        self._rng = rng
+        self.actions: list[int] = []
+
+    def random(self, *args, **kwargs):
+        return self._rng.random(*args, **kwargs)
+
+    def integers(self, *args, **kwargs):
+        value = self._rng.integers(*args, **kwargs)
+        self.actions.append(int(value))
+        return value
+
+    def choice(self, *args, **kwargs):
+        value = self._rng.choice(*args, **kwargs)
+        self.actions.append(int(value))
+        return value
+
+
 def one_episode_config(**changes) -> TabularConfig:
     """A single-episode config. Values still come from the yaml; only the run length is narrowed."""
     return replace(BASE_CONFIG, episodes=1, **changes)
+
+
+def _run_one(
+    algo,
+    *,
+    terminated: bool,
+    truncated: bool,
+    next_row: np.ndarray,
+    epsilon: float | None,
+    seed: int,
+) -> tuple[TabularConfig, tuple[int, ...], int, float]:
+    """Drive `algo` for a single transition and report the config, the actions it drew and the
+    one Q-entry that moved."""
+    changes = {} if epsilon is None else {"epsilon_start": epsilon, "epsilon_end": epsilon}
+    config = one_episode_config(**changes)
+    env = OneStepEnv(terminated=terminated, truncated=truncated)
+    q_table = make_q_table()
+    q_table[OneStepEnv.NEXT] = np.array(next_row, dtype=np.float64)
+
+    rng = RecordingRng(make_rng(seed))
+    result = algo(env, config, rng=rng, q_table=q_table)
+    updated = result.q_table[OneStepEnv.START]
+    touched = np.flatnonzero(updated != 0.0)
+    assert len(touched) == 1, "exactly one action was taken, so exactly one entry may move"
+    return config, tuple(rng.actions), int(touched[0]), float(updated[touched[0]])
 
 
 def run_one_transition(
@@ -140,22 +215,56 @@ def run_one_transition(
     epsilon: float | None = None,
     seed: int = 0,
 ) -> Transition:
-    """Run one transition into a next state whose Q-row is known, large and non-uniform.
+    """Run one Q-learning transition into a next state whose Q-row is known and non-uniform.
 
     `epsilon` pins both ends of the schedule when given, so the behaviour policy at episode 0 is
     forced rather than inherited; `seed` picks which action the forced exploration draws.
     """
-    changes = {} if epsilon is None else {"epsilon_start": epsilon, "epsilon_end": epsilon}
-    config = one_episode_config(**changes)
-    env = OneStepEnv(terminated=terminated, truncated=truncated)
-    q_table = make_q_table()
-    q_table[OneStepEnv.NEXT] = np.array(next_row, dtype=np.float64)
+    config, _, action, value = _run_one(
+        q_learning,
+        terminated=terminated,
+        truncated=truncated,
+        next_row=next_row,
+        epsilon=epsilon,
+        seed=seed,
+    )
+    return Transition(config, action, value)
 
-    result = q_learning(env, config, rng=make_rng(seed), q_table=q_table)
-    updated = result.q_table[OneStepEnv.START]
-    touched = np.flatnonzero(updated != 0.0)
-    assert len(touched) == 1, "exactly one action was taken, so exactly one entry may move"
-    return Transition(config, int(touched[0]), float(updated[touched[0]]))
+
+def run_one_sarsa_transition(
+    *,
+    terminated: bool,
+    truncated: bool,
+    next_row: np.ndarray = NEXT_Q_ROW,
+    epsilon: float | None = None,
+    seed: int = 0,
+) -> SarsaTransition:
+    """The mirror of `run_one_transition` for SARSA, which draws a second action at `s'`.
+
+    On a terminated transition there is no successor action to draw and `next_action` is None; on a
+    truncated one the agent is still playing, so SARSA must have drawn `a'` in order to bootstrap
+    and exactly two actions must appear in the recording.
+    """
+    config, actions, action, value = _run_one(
+        algorithms.sarsa,
+        terminated=terminated,
+        truncated=truncated,
+        next_row=next_row,
+        epsilon=epsilon,
+        seed=seed,
+    )
+    expected_draws = 1 if terminated else 2
+    assert len(actions) == expected_draws, (
+        f"SARSA should draw {expected_draws} action(s) on a "
+        f"{'terminated' if terminated else 'truncated'} one-step episode "
+        f"(a at s, then a' at s' unless the game ended), but drew {actions}"
+    )
+    assert actions[0] == action, (
+        f"the entry that moved belongs to action {action} but the first action drawn was "
+        f"{actions[0]}: the update was applied to a different action than the one taken"
+    )
+    next_action = None if terminated else actions[1]
+    return SarsaTransition(config, action, next_action, value)
 
 
 # --- B4: random tie-breaking ---------------------------------------------------------------------
@@ -460,7 +569,258 @@ def test_history_csv_has_the_documented_columns(scratch_dir):
     assert len(lines) == 6  # header plus one row per episode
 
 
-def test_sarsa_is_still_unimplemented():
-    """A3-004 owns SARSA. This pins the placeholder so it cannot be mistaken for a working agent."""
-    with pytest.raises(NotImplementedError):
-        algorithms.sarsa(GridWorld(level_index=0, seed=0), BASE_CONFIG)
+# --- C1/C2: SARSA is on-policy, and shares Q-learning's schedule --------------------------------
+#
+# Every test below is the mirror image of one above it. Where the Q-learning tests assert the update
+# equals `max(Q[s'])` and is invariant to the action taken, these assert it equals `Q[s'][a']` and
+# *varies* with it. Both sets run against the same successor rows, so if the two implementations
+# ever converge on one update rule, one side or the other goes red.
+
+
+def test_sarsa_update_bootstraps_from_the_action_taken_not_the_max():
+    """The mirror of `test_update_bootstraps_from_the_max_not_from_the_action_taken`.
+
+    Epsilon is pinned at 1.0 so the action drawn at `s'` is pure exploration and usually not the
+    greedy one; the seeds are fixed so the sample is reproducible rather than lucky. Under
+    `OFF_POLICY_NEXT_ROW` the two candidate targets are 96.0 (off-policy, an update of +9.6) and
+    -37.0 (on-policy for any of the three non-greedy actions, an update of -3.7). They differ in
+    sign, so no tolerance can blur them, and an implementation that reached for `max` here would
+    fail on every exploratory seed.
+    """
+    seeds = tuple(range(24))
+    next_actions: list[int] = []
+
+    for seed in seeds:
+        config, action, next_action, updated = run_one_sarsa_transition(
+            terminated=False,
+            truncated=True,
+            next_row=OFF_POLICY_NEXT_ROW,
+            epsilon=1.0,
+            seed=seed,
+        )
+        assert next_action is not None
+        next_actions.append(next_action)
+
+        on_policy_target = config.alpha * (
+            1.0 + config.gamma * float(OFF_POLICY_NEXT_ROW[next_action])
+        )
+        off_policy_target = config.alpha * (
+            1.0 + config.gamma * float(OFF_POLICY_NEXT_ROW.max())
+        )
+        message = (
+            f"seed {seed}: the behaviour policy took action {action} at s and then drew "
+            f"a' = {next_action} at s', where Q[s'] is {OFF_POLICY_NEXT_ROW.tolist()}.\n"
+            f"  on-policy  (SARSA)      target alpha * (r + gamma * Q[s'][a']) = "
+            f"{on_policy_target}\n"
+            f"  off-policy (Q-learning) target alpha * (r + gamma * max(Q[s'])) = "
+            f"{off_policy_target}\n"
+            f"  observed = {updated}"
+        )
+        assert updated == pytest.approx(on_policy_target), message
+        if next_action != OFF_POLICY_GREEDY_ACTION:
+            assert updated != pytest.approx(off_policy_target), (
+                message + "\n  -> the observed value is the off-policy target: SARSA bootstrapped "
+                "from the best action available at s' instead of the action it actually took "
+                "next. SARSA must be on-policy."
+            )
+
+    exploratory = [action for action in next_actions if action != OFF_POLICY_GREEDY_ACTION]
+    assert len(exploratory) >= len(seeds) // 2, (
+        f"this test only separates the two update rules on transitions where a' is not the greedy "
+        f"action at s'; only {len(exploratory)} of {len(seeds)} seeds explored, so the sample is "
+        f"too greedy to prove anything. Next actions: {next_actions}"
+    )
+
+
+def test_sarsa_update_varies_with_the_action_actually_taken():
+    """The mirror of `test_greedy_and_exploratory_transitions_receive_the_same_update`.
+
+    Varying with `a'` *is* the definition of on-policy, and it is the one property no off-policy
+    target can reproduce: Q-learning's answer is the same number for all four actions. So this
+    asserts the opposite of its twin — four distinct updates, one per action drawn at `s'`.
+    """
+    updates: dict[int, list[float]] = {}
+    for seed in range(24):
+        _, _, next_action, updated = run_one_sarsa_transition(
+            terminated=False,
+            truncated=True,
+            next_row=OFF_POLICY_NEXT_ROW,
+            epsilon=1.0,
+            seed=seed,
+        )
+        assert next_action is not None
+        updates.setdefault(next_action, []).append(updated)
+
+    assert len(updates) == N_ACTIONS, (
+        f"forced exploration should draw every action at s', got {updates}"
+    )
+    for next_action, values in updates.items():
+        assert max(values) - min(values) == pytest.approx(0.0), (
+            f"a' = {next_action} produced inconsistent updates {values}; the target is a function "
+            f"of a' alone"
+        )
+    spread = max(v for group in updates.values() for v in group) - min(
+        v for group in updates.values() for v in group
+    )
+    assert spread > 1.0, (
+        f"the update did not vary with the action taken ({updates}); an on-policy target must "
+        f"track Q[s'][a'], and an update that is identical for all four actions is the signature "
+        f"of an off-policy (Q-learning) target"
+    )
+
+
+def test_sarsa_terminal_target_has_no_bootstrap_term():
+    """`target = r` on a real ending, for SARSA too: there is no a' to take after the game ends."""
+    config, _, next_action, updated = run_one_sarsa_transition(terminated=True, truncated=False)
+    assert next_action is None
+    assert updated == pytest.approx(config.alpha * 1.0)
+
+
+def test_sarsa_truncation_still_bootstraps():
+    """The step cap is not the game ending, so SARSA draws a' at s' and keeps the bootstrap."""
+    config, _, next_action, updated = run_one_sarsa_transition(terminated=False, truncated=True)
+    assert next_action is not None
+    expected = config.alpha * (1.0 + config.gamma * float(NEXT_Q_ROW[next_action]))
+    assert updated == pytest.approx(expected)
+    assert updated != pytest.approx(config.alpha * 1.0), (
+        "a truncated transition must not be treated as terminal"
+    )
+
+
+def _function_source(name: str) -> ast.FunctionDef:
+    tree = ast.parse(Path(algorithms.__file__).read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{name} is not defined in {algorithms.__file__}")
+
+
+def _called_names(node: ast.AST) -> set[str]:
+    return {
+        call.func.id
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+    }
+
+
+def test_sarsa_body_never_takes_a_max_over_the_successor_row():
+    """C1 read straight off the source: no `max` anywhere inside `sarsa`.
+
+    The behavioural tests above already pin the target, but this is the check that survives a
+    refactor — `q_learning`'s `float(q[next_state].max())` copy-pasted into `sarsa` is the single
+    most likely way this file loses its second algorithm, and it would leave the level 1 comparison
+    showing two identical policies with no error anywhere.
+    """
+    node = _function_source("sarsa")
+    attributes = {n.attr for n in ast.walk(node) if isinstance(n, ast.Attribute)}
+    names = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+    assert "max" not in attributes and "max" not in names, (
+        "sarsa references `max`; its target must be Q[s'][a'], not max(Q[s'])"
+    )
+    q_attributes = {
+        n.attr for n in ast.walk(_function_source("q_learning")) if isinstance(n, ast.Attribute)
+    }
+    assert "max" in q_attributes, (
+        "q_learning stopped taking a max, so this test is no longer checking a real difference"
+    )
+
+
+def test_both_algorithms_build_the_schedule_at_the_same_construction_site():
+    """C2 by inspection: neither loop constructs a `LinearEpsilon` of its own.
+
+    Both call `epsilon_schedule(config)`, and that function is the only place in the module where a
+    schedule is built — so "SARSA uses the same exploration schedule as Q-learning" is a fact about
+    one function rather than a promise about two.
+    """
+    for name in ("q_learning", "sarsa"):
+        called = _called_names(_function_source(name))
+        assert "epsilon_schedule" in called, f"{name} must build its schedule from the config"
+        assert "select_action" in called, f"{name} must use the shared epsilon-greedy selector"
+        assert "make_q_table" in called, f"{name} must use the shared table constructor"
+        assert "LinearEpsilon" not in called, (
+            f"{name} constructs its own schedule; C2 requires the shared one"
+        )
+
+    module = ast.parse(Path(algorithms.__file__).read_text(encoding="utf-8"))
+    constructions = [
+        call
+        for call in ast.walk(module)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Name)
+        and call.func.id == "LinearEpsilon"
+    ]
+    assert len(constructions) == 1, (
+        f"expected exactly one LinearEpsilon construction site (inside `epsilon_schedule`), found "
+        f"{len(constructions)}"
+    )
+
+
+def test_both_algorithms_follow_the_same_epsilon_sequence():
+    """C2 behaviourally: the epsilon logged episode-by-episode is identical for the two runs."""
+    config = replace(
+        BASE_CONFIG,
+        episodes=40,
+        epsilon_start=0.9,
+        epsilon_end=0.1,
+        epsilon_decay_episodes=25,
+    )
+    schedule = LinearEpsilon(start=0.9, end=0.1, decay_episodes=25)
+    expected = [schedule(episode) for episode in range(config.episodes)]
+
+    for algo in (q_learning, algorithms.sarsa):
+        env = GridWorld(level_index=1, seed=config.seed, max_steps=config.max_steps_per_episode)
+        result = algo(env, config, rng=make_rng(config.seed))
+        assert result.epsilons == pytest.approx(expected)
+
+
+def test_sarsa_reports_itself_and_records_one_row_per_episode():
+    config = replace(BASE_CONFIG, episodes=9)
+    env = GridWorld(level_index=1, seed=config.seed, max_steps=config.max_steps_per_episode)
+    result = algorithms.sarsa(env, config, rng=make_rng(config.seed))
+    assert result.algo == "sarsa"
+    assert result.level == 1
+    assert len(result.history) == config.episodes
+
+
+def test_sarsa_learns_a_safe_route_to_the_apple_on_the_cliff_level():
+    """The C3 claim in miniature: SARSA solves level 1 without walking into the fire.
+
+    Not a check that it is *shorter* than Q-learning's route — it is not, and it should not be. The
+    check is that the on-policy update still converges to a policy that collects the apple, which
+    is what makes the route comparison a comparison of two working agents.
+    """
+    config = replace(BASE_CONFIG, episodes=2000, epsilon_decay_episodes=1400, seed=0)
+    env = GridWorld(level_index=1, seed=config.seed, max_steps=config.max_steps_per_episode)
+    result = algorithms.sarsa(env, config, rng=make_rng(config.seed))
+
+    rollout = greedy_rollout(env, result.q_table, rng=make_rng(config.seed))
+    assert rollout.collected == len(env.collectible_cells) == 1
+    assert not rollout.died and not rollout.truncated
+    assert rollout.total_return == pytest.approx(1.0)
+    assert rollout.steps >= optimal_collection_steps(1)
+
+
+def test_policy_rollout_honours_its_epsilon():
+    """`policy_rollout` must actually use its epsilon — the death-rate measurement depends on it.
+
+    Run against a hand-built table that prefers RIGHT in every state, which on level 1 walks
+    straight off the start into the fire. Greedy must do exactly that on every seed; at epsilon 1
+    the table is ignored and some seed must do something else. A synthetic table rather than a
+    trained one on purpose: with `REWARD_STEP = 0` a briefly trained table is all zeros away from
+    the apple, every action ties, and a greedy rollout is already a random walk — so it would agree
+    with an exploring one by accident and the test would prove nothing.
+    """
+    table = defaultdict(lambda: np.array([0.0, 0.0, 0.0, 1.0]))  # RIGHT is the unique best
+    env = GridWorld(level_index=1, seed=0, max_steps=BASE_CONFIG.max_steps_per_episode)
+
+    greedy = {algorithms.greedy_rollout(env, table, rng=make_rng(seed)).path for seed in range(8)}
+    assert greedy == {((8, 0), (8, 1))}, "greedy must follow the table into the fire, every time"
+
+    explored = [
+        algorithms.policy_rollout(env, table, epsilon=1.0, rng=make_rng(seed)).path
+        for seed in range(8)
+    ]
+    assert any(path != ((8, 0), (8, 1)) for path in explored), (
+        f"epsilon 1.0 produced the greedy path on all 8 seeds ({explored}); the epsilon argument "
+        f"is being ignored"
+    )

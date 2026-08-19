@@ -43,7 +43,10 @@ fixed rewards and mechanics — if it fails, something has drifted from the spec
 # Part I
 python -m train.train_gridworld --level 0 --algo q
 python -m train.train_gridworld --level 1 --algo sarsa
-python -m eval.play_gridworld --level 1 --compare      # Q-learning vs SARSA, side by side
+python -m train.train_gridworld --level 1 --compare    # C3: both algorithms, one config,
+                                                       # side-by-side policy figure + death rates
+python -m eval.play_gridworld --level 1 --compare      # the same contrast animated, for the video
+                                                       # (not yet implemented — see A3-015)
 
 # Part II
 python -m train.train_arena --style direct

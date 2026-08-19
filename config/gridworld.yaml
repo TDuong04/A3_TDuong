@@ -23,8 +23,15 @@ intrinsic_experiment:
 # time to appear.
 level_overrides:
   1:
-    episodes: 4000
-    epsilon_decay_episodes: 3000
+    # 4000 was not enough and the symptom was misleading: both algorithms detoured to row 6 and the
+    # C3 comparison showed two identical policies. The cause was Q-learning, not SARSA. The cells
+    # along row 7 are only reached by an agent that has already survived several steps beside the
+    # fire, so they are the last states in the level to converge; until they do, Q-learning's own
+    # greedy policy avoids the row it should be hugging. At 8000/6000 Q-learning finds the 11-step
+    # edge route and SARSA still detours (13 steps) on seeds 0, 1 and 2. epsilon_end stays at the
+    # shared 0.05: it was never the problem, and at 0.05 the risk is still priced in.
+    episodes: 8000
+    epsilon_decay_episodes: 6000
   4:
     episodes: 6000
     epsilon_decay_episodes: 4000
