@@ -2,7 +2,7 @@
 id: A3-002
 title: Build the gridworld Pygame renderer
 type: feature
-status: open
+status: done
 priority: P0
 rubric: A1
 points_at_risk: 2.0
@@ -12,7 +12,7 @@ owner: unassigned
 blocks: [A3-015]
 blocked_by: [A3-001]
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-20
 ---
 
 # A3-002 — Build the gridworld Pygame renderer
@@ -42,3 +42,4 @@ Files: `gridworld/render.py`. Nothing here may be imported from `env.py`.
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/2
+- 2026-08-20 — verified and committed in 59c3c22; all six surviving mutants killed by pixel-level assertions

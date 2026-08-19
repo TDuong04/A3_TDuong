@@ -2,7 +2,7 @@
 id: A3-003
 title: Implement Q-learning and demonstrate it on level 0
 type: feature
-status: open
+status: done
 priority: P0
 rubric: B
 points_at_risk: 2.5
@@ -12,7 +12,7 @@ owner: unassigned
 blocks: [A3-004, A3-005]
 blocked_by: [A3-001]
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-20
 ---
 
 # A3-003 — Implement Q-learning and demonstrate it on level 0
@@ -39,3 +39,4 @@ Files: `gridworld/algorithms.py`, `train/train_gridworld.py`.
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/3
+- 2026-08-20 — verified and committed in e77bcef; greedy rollout 17 steps against an independently computed BFS optimum of 17

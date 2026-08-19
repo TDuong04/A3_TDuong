@@ -2,7 +2,7 @@
 id: A3-001
 title: Implement the gridworld environment core
 type: feature
-status: open
+status: done
 priority: P0
 rubric: A
 points_at_risk: 2.0
@@ -12,7 +12,7 @@ owner: unassigned
 blocks: [A3-002, A3-003]
 blocked_by: []
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-20
 ---
 
 # A3-001 — Implement the gridworld environment core
@@ -44,3 +44,4 @@ Files: `gridworld/env.py`. Constants already frozen in `gridworld/constants.py`.
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/1
+- 2026-08-20 — verified and committed in 232877c; evaluator killed 10/12 mutants, two test gaps since closed and proven to bite
