@@ -35,6 +35,8 @@ level_overrides:
 
 rendering:
   cell_size: 56
-  fps: 30           # playback speed during visual rollout; training runs headless
+  fps: 30           # frame rate of the window; training runs headless
   show_policy_arrows: true
   show_q_values: false
+  animation_seconds: 0.12   # slide duration between cells; clamped below the step interval
+  steps_per_second: 6.0     # simulation speed during visual rollout, adjusted live with +/-
