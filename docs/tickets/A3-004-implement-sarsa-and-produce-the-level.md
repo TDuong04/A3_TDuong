@@ -2,7 +2,7 @@
 id: A3-004
 title: Implement SARSA and produce the level 1 comparison
 type: feature
-status: open
+status: done
 priority: P0
 rubric: C
 points_at_risk: 3.0
@@ -27,11 +27,11 @@ The comparison figure is also the strongest thing to show in the video for Part 
 
 ## Acceptance criteria
 
-- [ ] On-policy update uses the action actually taken next, never a max
-- [ ] Uses the same `LinearEpsilon` instance construction as Q-learning — provable by inspection
-- [ ] Both algorithms run on level 1 under identical seeds and schedules
-- [ ] Figure showing both greedy policies over the cliff, saved to `results/`
-- [ ] Short written comparison of the two routes for the report
+- [x] On-policy update uses the action actually taken next, never a max
+- [x] Uses the same `LinearEpsilon` instance construction as Q-learning — provable by inspection
+- [x] Both algorithms run on level 1 under identical seeds and schedules
+- [x] Figure showing both greedy policies over the cliff, saved to `results/`
+- [x] Short written comparison of the two routes for the report
 
 ## Notes
 
@@ -52,3 +52,4 @@ Files: `gridworld/algorithms.py`, `eval/play_gridworld.py` (`--compare` mode).
   cause; Q-learning simply had not converged on row 7, whose cells are only reached by an agent
   that has already survived several steps beside the fire. `level_overrides[1]` raised to
   8000 episodes / 6000 decay; `epsilon_end` left at the shared 0.05 so level 0 is untouched.
+- 2026-08-20 — PASS. Committed in 18c695e. Evaluator reproduced every headline number independently: routes 11 vs 13 steps, BFS optimum 11, death rates 10.56% vs 1.46% over 20,000 rollouts (the published 500-rollout figures of 11.4%/1.8% reproduce exactly). Cross-seed split holds 10/10 including 7 seeds never published. Level 0 re-verified at 17 steps, no regression. 0 of 5 mutants survived. Figure defects split out to [[A3-019]].
