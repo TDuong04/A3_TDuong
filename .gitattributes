@@ -1,0 +1,28 @@
+# Line endings. Three people on possibly different platforms; without this, one
+# person's editor rewrites every line of a file and the real change hides inside
+# a whole-file diff. Text is normalised to LF in the repository and checked out
+# as LF everywhere, so a diff means someone changed something.
+* text=auto eol=lf
+
+# Binaries. Never normalised, never diffed as text - a corrupted PDF or model is
+# not recoverable from a mangled diff, and these all ship inside the submission.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.zip binary
+*.npz binary
+*.npy binary
+*.mp4 binary
+*.wav binary
+*.ogg binary
+*.ttf binary
+*.otf binary
+
+# Stable Baselines3 saves models as zip archives; TensorBoard event files are
+# protobuf. Both are required to be committed by the submission checklist.
+*.pt binary
+*.pth binary
+models/** binary
+logs/**/events.out.tfevents.* binary
