@@ -25,8 +25,13 @@ The comparisons the rubric asks for are produced here:
   - C3: run Q-learning and SARSA on level 1 under identical seeds and schedules, then plot both
     greedy policies over the cliff. The figure is the evidence, and it is the same figure the video
     should show.
-  - F: run level 6 twice, once at `intrinsic_reward_strength: 0.0` and once at `0.5`, and plot both
-    curves on one axis.
+  - F: run level 6 at `intrinsic_reward_strength: 0.0` and at `0.5` - the pair the config's
+    `intrinsic_experiment` block names - over five seeds each, and plot both curves on one axis as
+    a mean with a standard-error band. The plotted series is the ENVIRONMENT return: the intrinsic
+    bonus is paid on nearly every step, so plotting the shaped return would separate the two arms
+    for an arithmetic reason and measure nothing. `--intrinsic-sweep` also records the four metrics
+    a sparse level needs - share of episodes solved, episodes until the first success, final greedy
+    success and mean environment return - and writes the written explanation the rubric asks for.
 
 `--levels` is the A3-005/A3-006 evidence run and it measures two different things on purpose.
 Levels 2-3 are deterministic, so a greedy rollout *is* the policy: what gets recorded there is the
@@ -72,6 +77,7 @@ from gridworld.algorithms import (  # noqa: E402
     q_learning,
     sarsa,
     save_q_table,
+    train_with_intrinsic_reward,
 )
 from gridworld.constants import (  # noqa: E402
     ACTION_DELTAS,
@@ -898,7 +904,10 @@ def _rewrap_prose(text: str, width: int = 96) -> str:
     """
     blocks = []
     for block in text.split("\n\n"):
-        if block.startswith(("#", "|", "*", "-")) or block.lstrip().startswith("|"):
+        # A fenced code block must survive verbatim: reflowing it would join its lines
+        # into one paragraph and the fence would stop being a code block.
+        if (block.startswith(("#", "|", "*", "-")) or block.lstrip().startswith("|")
+                or "```" in block):
             blocks.append(block)
         else:
             blocks.append(textwrap.fill(block, width=width))
@@ -1488,6 +1497,808 @@ def write_levels_markdown(report: dict[str, Any], path: Path) -> Path:
     return path
 
 
+# --- F / A3-007: the level 6 intrinsic-reward experiment -----------------------------------------
+
+
+#: Episodes at the tail of a run that the "converged" numbers are read from. Not a hyperparameter —
+#: nothing here reaches the learner — but the window over which a rate is called final. 500 of the
+#: experiment's 5000 episodes is long enough that a rate is not one lucky episode, and short enough
+#: to sit entirely after the epsilon schedule has finished decaying at 2000.
+SUCCESS_WINDOW = 500
+
+#: Default seeds for the experiment. Five, not one: whether an epsilon-greedy agent ever stumbles
+#: onto the chest at all is close to a coin flip early on, so a single seed on level 6 is an
+#: anecdote. Five is also the honest ceiling on what can be claimed — see `difference_of_means`.
+INTRINSIC_SEEDS: tuple[int, ...] = (0, 1, 2, 3, 4)
+
+#: Two-sided 95% critical values of Student's t by degrees of freedom. Hard-coded because scipy is
+#: not a dependency of this project and a five-seed experiment does not justify adding one. Past
+#: the end of the table the normal value is close enough that the difference is invisible next to
+#: the sampling error it is describing.
+_T_CRITICAL_95: dict[int, float] = {
+    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306,
+    9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
+    16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086, 25: 2.060, 30: 2.042,
+}
+
+
+def _t_critical_95(df: float) -> float:
+    """The two-sided 95% t multiplier for `df`, rounded conservatively to the table entry below."""
+    if df < 1:
+        return float("inf")
+    candidates = [key for key in sorted(_T_CRITICAL_95) if key <= df]
+    return _T_CRITICAL_95[candidates[-1]] if candidates else 1.96
+
+
+def summarise_across_seeds(values: Sequence[float]) -> dict[str, Any]:
+    """Mean, sample sd and standard error of a per-seed measurement.
+
+    The standard error is the number that belongs beside the mean in the report. A spread quoted as
+    a min-max range, or as the largest gap between any two seeds, *grows* with the sample size and
+    says nothing about how well the mean is pinned down; the standard error shrinks like 1/sqrt(n)
+    and does.
+    """
+    array = np.asarray(list(values), dtype=np.float64)
+    n = int(array.size)
+    sd = float(array.std(ddof=1)) if n > 1 else 0.0
+    return {
+        "n": n,
+        "values": [float(value) for value in array],
+        "mean": float(array.mean()) if n else float("nan"),
+        "sd": sd,
+        "sem": float(sd / np.sqrt(n)) if n > 1 else 0.0,
+    }
+
+
+def difference_of_means(
+    treatment: Sequence[float],
+    baseline: Sequence[float],
+) -> dict[str, Any]:
+    """`mean(treatment) - mean(baseline)` with a Welch standard error and a 95% interval.
+
+    Deliberately a difference of means and not a comparison of the best seed of one arm against the
+    worst of the other. With five runs per arm the largest pairwise gap is a statistic of the tails,
+    it grows with the sample size, and quoting it makes noise look like an effect.
+
+    What this does *not* support is a claim of significance. Welch's interval at four degrees of
+    freedom is about plus or minus 2.8 standard errors wide, so at n = 5 per arm only a very large
+    effect clears zero. `significant_at_95` is reported so the write-up can state plainly whether
+    the interval excludes zero, and the prose around it says what that is worth.
+    """
+    a, b = summarise_across_seeds(treatment), summarise_across_seeds(baseline)
+    var_a = a["sd"] ** 2 / a["n"] if a["n"] > 1 else 0.0
+    var_b = b["sd"] ** 2 / b["n"] if b["n"] > 1 else 0.0
+    standard_error = float(np.sqrt(var_a + var_b))
+    # Welch-Satterthwaite. If one arm is exactly constant the denominator vanishes; fall back to
+    # the smaller sample's df rather than reporting an infinite one.
+    denominator = (
+        (var_a**2 / (a["n"] - 1) if a["n"] > 1 else 0.0)
+        + (var_b**2 / (b["n"] - 1) if b["n"] > 1 else 0.0)
+    )
+    df = (
+        float((var_a + var_b) ** 2 / denominator)
+        if denominator > 0
+        else float(min(a["n"], b["n"]) - 1)
+    )
+    difference = a["mean"] - b["mean"]
+    half_width = _t_critical_95(df) * standard_error
+    return {
+        "treatment_mean": a["mean"],
+        "baseline_mean": b["mean"],
+        "difference": float(difference),
+        "standard_error": standard_error,
+        "welch_df": df,
+        "ci95_low": float(difference - half_width),
+        "ci95_high": float(difference + half_width),
+        # Read straight off the interval, so the flag can never contradict the numbers printed
+        # beside it. The case that forced this: every seed of one arm scored 1 and every seed of
+        # the other scored 0, giving a zero standard error, an interval of exactly [-1, -1] and —
+        # under an earlier `standard_error > 0` guard — the label "includes zero" next to an
+        # interval that plainly does not. `zero_variance` marks that degenerate case so the prose
+        # can describe it as "identical on every seed" rather than dress it up as an inference.
+        "significant_at_95": bool(
+            (difference - half_width) > 0.0 or (difference + half_width) < 0.0
+        ),
+        "zero_variance": bool(standard_error == 0.0),
+        "n_per_arm": [a["n"], b["n"]],
+    }
+
+
+def strength_tag(strength: float) -> str:
+    """`0.5` -> `strength0p5`. A dot in a filename is legal and still confuses half the tools."""
+    return f"strength{strength:g}".replace(".", "p").replace("-", "m")
+
+
+def intrinsic_stem_for(level: int, algo: str, strength: float, seed: int) -> str:
+    """Level, algorithm, strength and seed in every name — the strength *is* the condition here,
+    so a file that cannot name it is no more citable than one that cannot name its seed."""
+    return f"level{level}_{algo}_{strength_tag(strength)}_seed{seed}"
+
+
+def intrinsic_experiment_settings(name: str = "gridworld") -> dict[str, Any]:
+    """The `intrinsic_experiment` block from the config: level, strengths, episodes.
+
+    The experiment's parameters live beside the training parameters rather than in this file, for
+    the same B3 reason everything else does: `0.0` and `0.5` are the condition under test, and a
+    literal here would detach the figure from the file the report cites.
+    """
+    block = dict(load_yaml(name)["intrinsic_experiment"])
+    return {
+        "level": int(block["level"]),
+        "strengths": [float(value) for value in block["strengths"]],
+        "episodes": int(block["episodes"]),
+    }
+
+
+def intrinsic_run(
+    level: int,
+    algo: str,
+    config: TabularConfig,
+    *,
+    results_dir: Path = DEFAULT_RESULTS_DIR,
+    write_artifacts: bool = True,
+) -> dict[str, Any]:
+    """One seeded run of `train_with_intrinsic_reward`, with the metrics a sparse level needs.
+
+    The seed streams are spawned exactly as `run()` spawns them — `SeedSequence(seed).spawn(3)` for
+    the env, the learner and the greedy rollout — so a run at `intrinsic_reward_strength = 0.0` is
+    the same computation as the plain `run()` on the same seed. The baseline arm is therefore a
+    genuine control rather than a second, differently-seeded run that happens to have the bonus off.
+
+    Return alone is a poor summary here. Level 6 pays 0 for the key and +2 for the chest and nothing
+    else, so an episode scores either 0.0 or 2.0 and the mean return is just the success rate times
+    two. What separates an agent that is *finding* the chest from one that has *learnt the route* is
+    the pair of numbers either side of that: how early the first success happened, and how often the
+    agent still succeeds once epsilon has finished decaying.
+    """
+    seed_everything(config.seed)
+    env_seed, learner_seed, rollout_seed = np.random.SeedSequence(config.seed).spawn(3)
+    env = GridWorld(
+        level_index=level,
+        rng=make_rng(env_seed),
+        max_steps=config.max_steps_per_episode,
+    )
+
+    result = train_with_intrinsic_reward(env, config, algo=algo, rng=make_rng(learner_seed))
+    rollout = greedy_rollout(env, result.q_table, rng=make_rng(rollout_seed))
+    optimum = optimal_collection_steps(level)
+    n_collectibles = len(env.collectible_cells)
+
+    solved = np.array(
+        [record.collected == n_collectibles and not record.died for record in result.history],
+        dtype=bool,
+    )
+    returns = result.returns
+    window = min(SUCCESS_WINDOW, len(solved))
+    first_success = int(np.flatnonzero(solved)[0]) if solved.any() else None
+
+    summary: dict[str, Any] = {
+        "level": level,
+        "algo": algo,
+        "seed": config.seed,
+        "intrinsic_reward_strength": float(config.intrinsic_reward_strength),
+        "episodes": config.episodes,
+        "alpha": config.alpha,
+        "gamma": config.gamma,
+        "epsilon_start": config.epsilon_start,
+        "epsilon_end": config.epsilon_end,
+        "epsilon_decay_episodes": config.epsilon_decay_episodes,
+        "max_steps_per_episode": config.max_steps_per_episode,
+        "n_collectibles": n_collectibles,
+        "bfs_optimum_steps": optimum,
+        # --- every metric below is computed from ENVIRONMENT reward alone --------------------
+        "solved_episodes": int(solved.sum()),
+        "solved_fraction": float(solved.mean()),
+        "solved_fraction_final": float(solved[-window:].mean()),
+        "episodes_to_first_success": first_success,
+        # A run that never succeeded has no first success. Recording the episode budget instead,
+        # flagged as censored, keeps the seed in the mean without pretending it succeeded on the
+        # final episode — and the flag is what stops that mean being read as unbiased.
+        "first_success_censored": bool(first_success is None),
+        "first_success_or_budget": int(config.episodes if first_success is None else first_success),
+        "mean_return": float(returns.mean()),
+        "mean_return_final": float(returns[-window:].mean()),
+        "mean_steps_final": float(result.steps[-window:].mean()),
+        "greedy_solved": bool(
+            rollout.collected == n_collectibles and not rollout.died and not rollout.truncated
+        ),
+        "greedy_steps": rollout.steps,
+        "greedy_return": rollout.total_return,
+        "greedy_collected": rollout.collected,
+        "success_window": int(window),
+        "artifacts": {},
+    }
+
+    if write_artifacts:
+        results_dir = Path(results_dir)
+        stem = intrinsic_stem_for(level, algo, config.intrinsic_reward_strength, config.seed)
+        history_path = result.write_history_csv(results_dir / f"history_{stem}.csv")
+        qtable_path = save_q_table(result.q_table, results_dir / f"qtable_{stem}.npz")
+        summary["artifacts"] = {
+            "history_csv": _reportable(history_path),
+            "q_table": _reportable(qtable_path),
+        }
+        summary["paths"] = {"history_csv": history_path, "q_table": qtable_path}
+
+    summary["result"] = result
+    summary["rollout"] = rollout
+    return summary
+
+
+#: The metrics aggregated across seeds and compared between the two arms. Deliberately four of
+#: them: on a level this sparse an exploration bonus can succeed at finding the goal and still fail
+#: at learning the route, and a single headline number cannot show both halves of that.
+INTRINSIC_METRICS: tuple[str, ...] = (
+    "solved_fraction",
+    "solved_fraction_final",
+    "first_success_or_budget",
+    "mean_return",
+    "mean_return_final",
+    "greedy_solved",
+)
+
+
+def intrinsic_experiment(
+    *,
+    level: int | None = None,
+    algo: str = "q",
+    strengths: Sequence[float] | None = None,
+    extra_strengths: Sequence[float] = (),
+    seeds: Sequence[int] = INTRINSIC_SEEDS,
+    episodes: int | None = None,
+    epsilon_decay_episodes: int | None = None,
+    results_dir: Path = DEFAULT_RESULTS_DIR,
+    write_artifacts: bool = True,
+) -> dict[str, Any]:
+    """The F-row experiment: level 6 at each strength over several seeds, with the figure.
+
+    `strengths` defaults to the config's headline pair (0.0 and 0.5), and those two are what the
+    comparison figure shows. `extra_strengths` runs additional values into a second, supporting
+    figure and table, which is what tells "the bonus is the wrong size" apart from "a count-based
+    bonus does not help on this level" — different findings with different explanations.
+
+    Every arm shares the seed list, and within a seed both arms spawn the same env, learner and
+    rollout streams, so the two conditions begin from the same random walk and diverge only once
+    the bonus starts moving the table.
+    """
+    settings = intrinsic_experiment_settings()
+    level = settings["level"] if level is None else int(level)
+    headline = [float(s) for s in (settings["strengths"] if strengths is None else strengths)]
+    episodes = settings["episodes"] if episodes is None else int(episodes)
+    all_strengths = headline + [float(s) for s in extra_strengths if float(s) not in headline]
+
+    base = config_for_level(level)
+    changes: dict[str, Any] = {"episodes": episodes}
+    if epsilon_decay_episodes is not None:
+        changes["epsilon_decay_episodes"] = int(epsilon_decay_episodes)
+    base = replace(base, **changes)
+
+    runs: dict[float, list[dict[str, Any]]] = {}
+    for strength in all_strengths:
+        runs[strength] = [
+            intrinsic_run(
+                level,
+                algo,
+                replace(base, seed=int(seed), intrinsic_reward_strength=float(strength)),
+                results_dir=results_dir,
+                write_artifacts=write_artifacts,
+            )
+            for seed in seeds
+        ]
+
+    aggregates = {
+        strength: {
+            **{
+                metric: summarise_across_seeds([float(run[metric]) for run in arm])
+                for metric in INTRINSIC_METRICS
+            },
+            "censored_seeds": int(sum(run["first_success_censored"] for run in arm)),
+        }
+        for strength, arm in runs.items()
+    }
+
+    baseline, treatment = headline[0], headline[-1]
+    comparison = {
+        metric: difference_of_means(
+            [float(run[metric]) for run in runs[treatment]],
+            [float(run[metric]) for run in runs[baseline]],
+        )
+        for metric in INTRINSIC_METRICS
+    }
+
+    config_line = runs[baseline][0]
+    experiment: dict[str, Any] = {
+        "level": level,
+        "algo": algo,
+        "seeds": [int(seed) for seed in seeds],
+        "headline_strengths": headline,
+        "extra_strengths": [s for s in all_strengths if s not in headline],
+        "episodes": episodes,
+        "alpha": config_line["alpha"],
+        "gamma": config_line["gamma"],
+        "epsilon_start": config_line["epsilon_start"],
+        "epsilon_end": config_line["epsilon_end"],
+        "epsilon_decay_episodes": config_line["epsilon_decay_episodes"],
+        "max_steps_per_episode": config_line["max_steps_per_episode"],
+        "bfs_optimum_steps": config_line["bfs_optimum_steps"],
+        "level_total_reward": level_total_reward(level),
+        "success_window": config_line["success_window"],
+        "formula": "r_i = intrinsic_reward_strength / sqrt(n(s) + 1)",
+        "n_of_s_definition": (
+            "occupancies of the state the transition arrives in, within the current episode, "
+            "counted before this arrival; the counter is cleared at every env.reset()"
+        ),
+        "plotted_quantity": "environment return per episode; the intrinsic bonus is excluded",
+        "aggregates": {f"{strength:g}": value for strength, value in aggregates.items()},
+        "comparison_treatment_minus_baseline": comparison,
+        "runs": {
+            f"{strength:g}": [
+                {
+                    key: value
+                    for key, value in run.items()
+                    if key not in {"result", "rollout", "paths"}
+                }
+                for run in arm
+            ]
+            for strength, arm in runs.items()
+        },
+        "artifacts": {},
+    }
+    experiment["run_objects"] = runs
+
+    if write_artifacts:
+        results_dir = Path(results_dir)
+        stem = f"intrinsic_level{level}_{algo}"
+        experiment["paths"] = {}
+        figure_path = plot_intrinsic_comparison(
+            experiment, runs, headline, results_dir / f"{stem}_curve.png"
+        )
+        experiment["artifacts"]["comparison_figure"] = _reportable(figure_path)
+        experiment["paths"]["comparison_figure"] = figure_path
+        if experiment["extra_strengths"]:
+            sweep_path = plot_intrinsic_comparison(
+                experiment,
+                runs,
+                # Ascending, so the ordered colormap actually orders something: on the headline
+                # figure the two arms are told apart by colour, but on the sweep the reader has
+                # to see which way along the strength scale a curve sits.
+                sorted(all_strengths),
+                results_dir / f"{stem}_sweep.png",
+                subtitle="supporting strength sweep",
+            )
+            experiment["artifacts"]["sweep_figure"] = _reportable(sweep_path)
+            experiment["paths"]["sweep_figure"] = sweep_path
+        markdown_path = results_dir / f"{stem}.md"
+        json_path = results_dir / f"{stem}.json"
+        # Registered before either is written: the markdown cites the JSON by name, so the name
+        # has to exist in the dict the markdown is formatted from.
+        experiment["artifacts"]["explanation_markdown"] = _reportable(markdown_path)
+        experiment["artifacts"]["experiment_json"] = _reportable(json_path)
+        write_intrinsic_markdown(experiment, markdown_path)
+        # Named before the dump so the JSON can point at its own markdown and at itself. `paths`
+        # holds live `Path` objects for the caller and `run_objects` holds live `TrainingResult`s;
+        # neither is JSON, and both are repo-absolute besides.
+        json_path.write_text(
+            json.dumps(
+                {k: v for k, v in experiment.items() if k not in {"run_objects", "paths"}},
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        experiment["paths"]["explanation_markdown"] = markdown_path
+        experiment["paths"]["experiment_json"] = json_path
+
+    return experiment
+
+
+def plot_intrinsic_comparison(
+    experiment: dict[str, Any],
+    runs: dict[float, list[dict[str, Any]]],
+    strengths: Sequence[float],
+    path: Path,
+    *,
+    subtitle: str = "",
+) -> Path:
+    """Both conditions on one axis: mean environment return per episode, with a spread band.
+
+    **The plotted series is the environment return.** `TrainingResult.returns` sums what
+    `env.step()` paid and nothing else; the intrinsic bonus never enters it. That is the whole
+    validity of this figure. A bonus is paid on almost every step, so plotting the shaped return
+    would lift the strength-0.5 curve above the strength-0.0 curve by roughly (steps per episode x
+    bonus) whether or not the agent ever found the chest — the curves would separate for an
+    arithmetic reason and the figure would be evidence of nothing.
+
+    Mean across seeds with a plus/minus one standard error band, never a single seed. On a level
+    this sparse, whether the agent stumbles onto the chest at all in the first few hundred episodes
+    is close to a coin flip, and one seed of either condition can be made to look like either
+    result.
+
+    The lower panel is the cumulative count of solved episodes. It is the upper panel's data
+    integrated, but it is where "how long until the agent first solved it" is legible: the episode
+    each curve lifts off the x axis is that number, and a curve that stays flat is an arm that
+    never solved the level at all.
+    """
+    figure, axes = plt.subplots(2, 1, figsize=(9.5, 7.8), sharex=True)
+    # Two arms get the standard contrast pair; a longer sweep gets an ordered colormap, because
+    # with five strengths the reader needs to see which way along the scale a curve sits.
+    colours = (
+        ["tab:blue", "tab:red"] if len(strengths) == 2
+        else plt.get_cmap("viridis")(np.linspace(0.08, 0.82, len(strengths)))
+    )
+    window = max(1, experiment["episodes"] // 100)
+
+    for colour, strength in zip(colours, strengths, strict=True):
+        arm = runs[float(strength)]
+        label = f"strength {strength:g}" + (" (no bonus)" if strength == 0.0 else "")
+
+        curves = np.array([moving_average(run["result"].returns, window) for run in arm])
+        x = np.arange(curves.shape[1]) + window - 1
+        mean = curves.mean(axis=0)
+        sem = (curves.std(axis=0, ddof=1) / np.sqrt(len(arm)) if len(arm) > 1
+               else np.zeros_like(mean))
+        axes[0].plot(x, mean, color=colour, linewidth=1.9, label=label)
+        axes[0].fill_between(x, mean - sem, mean + sem, color=colour, alpha=0.22, linewidth=0)
+
+        solved = np.array(
+            [
+                np.cumsum(
+                    [
+                        record.collected == run["n_collectibles"] and not record.died
+                        for record in run["result"].history
+                    ]
+                )
+                for run in arm
+            ],
+            dtype=np.float64,
+        )
+        cumulative = solved.mean(axis=0)
+        cumulative_sem = (solved.std(axis=0, ddof=1) / np.sqrt(len(arm)) if len(arm) > 1
+                          else np.zeros_like(cumulative))
+        episodes_x = np.arange(solved.shape[1])
+        axes[1].plot(episodes_x, cumulative, color=colour, linewidth=1.9, label=label)
+        axes[1].fill_between(episodes_x, cumulative - cumulative_sem,
+                             cumulative + cumulative_sem, color=colour, alpha=0.22, linewidth=0)
+
+    full_return = experiment["level_total_reward"]
+    axes[0].axhline(full_return, color="tab:green", linestyle=":", linewidth=1.4,
+                    label=f"level solved = {full_return:g}")
+    axes[0].set_ylabel("environment return per episode\n(intrinsic bonus excluded)")
+    # "best" rather than a fixed corner: which corner is free depends on whether the arms
+    # converge, and this figure is generated for whatever the data turns out to be.
+    axes[0].legend(loc="best", fontsize=8)
+    axes[0].grid(alpha=0.25)
+    axes[0].set_title(
+        f"mean over {len(experiment['seeds'])} seeds, smoothed with a {window}-episode moving "
+        f"average; band = +/- 1 standard error",
+        fontsize=9,
+    )
+
+    axes[1].set_ylabel("cumulative episodes solved")
+    axes[1].set_xlabel("episode")
+    axes[1].legend(loc="best", fontsize=8)
+    axes[1].grid(alpha=0.25)
+    axes[1].set_title(
+        "the episode a curve lifts off the axis is when that arm first opened the chest",
+        fontsize=9,
+    )
+
+    decay = experiment["epsilon_decay_episodes"]
+    for axis in axes:
+        axis.axvline(decay, color="tab:grey", linestyle="--", linewidth=1.0, alpha=0.7)
+    axes[1].annotate(
+        f"epsilon reaches {experiment['epsilon_end']}",
+        xy=(decay, 0),
+        xytext=(5, 6),
+        textcoords="offset points",
+        fontsize=8,
+        color="tab:grey",
+    )
+
+    heading = (f"Level {experiment['level']} intrinsic reward"
+               + (f" - {subtitle}" if subtitle else ""))
+    figure.suptitle(
+        f"{heading}: r_i = strength / sqrt(n(s) + 1), n(s) counted within the episode\n"
+        f"{experiment['algo'].upper()}, {experiment['episodes']} episodes, seeds "
+        f"{experiment['seeds']}, alpha={experiment['alpha']}, gamma={experiment['gamma']}, "
+        f"eps {experiment['epsilon_start']}->{experiment['epsilon_end']} over {decay}, "
+        f"step cap {experiment['max_steps_per_episode']}",
+        fontsize=10,
+        y=0.995,
+        va="top",
+    )
+    figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.945))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+    return path
+
+
+def write_intrinsic_markdown(experiment: dict[str, Any], path: Path) -> Path:
+    """The written half of rubric F, formatted from the run that just happened.
+
+    Every number and every verdict below is derived from the experiment dict rather than typed, so
+    the prose cannot drift away from the figure beside it — including when the numbers make the
+    result a negative one. The direction words ("sooner"/"later", "helped"/"hurt") are computed the
+    same way, because a hand-written conclusion is exactly what survives a change in the data.
+    """
+    level = experiment["level"]
+    algo = experiment["algo"]
+    seeds = experiment["seeds"]
+    headline = experiment["headline_strengths"]
+    baseline, treatment = headline[0], headline[-1]
+    aggregates = experiment["aggregates"]
+    comparison = experiment["comparison_treatment_minus_baseline"]
+    window = experiment["success_window"]
+    n = len(seeds)
+    full_return = experiment["level_total_reward"]
+
+    def stat(strength: float, metric: str) -> dict[str, Any]:
+        return aggregates[f"{strength:g}"][metric]
+
+    def cell(strength: float, metric: str, fmt: str = "{:.3f}") -> str:
+        entry = stat(strength, metric)
+        return f"{fmt.format(entry['mean'])} +/- {fmt.format(entry['sem'])}"
+
+    def diff_line(metric: str, fmt: str = "{:.3f}") -> str:
+        entry = comparison[metric]
+        verdict = (
+            "every seed of both arms gave the same value, so the interval is a point"
+            if entry["zero_variance"]
+            else "excludes zero" if entry["significant_at_95"]
+            else "includes zero"
+        )
+        return (
+            f"{fmt.format(entry['difference'])} +/- {fmt.format(entry['standard_error'])} "
+            f"(95% CI {fmt.format(entry['ci95_low'])} to {fmt.format(entry['ci95_high'])}, "
+            f"{verdict})"
+        )
+
+    rows = []
+    for key in sorted(aggregates, key=float):
+        value = float(key)
+        censored = aggregates[key]["censored_seeds"]
+        first = aggregates[key]["first_success_or_budget"]
+        first_text = f"{first['mean']:.0f} +/- {first['sem']:.0f}"
+        if censored:
+            first_text += f" ({censored}/{n} never)"
+        rows.append(
+            f"| {value:g} | {cell(value, 'solved_fraction', '{:.1%}')} "
+            f"| {cell(value, 'solved_fraction_final', '{:.1%}')} | {first_text} "
+            f"| {cell(value, 'mean_return_final', '{:.3f}')} "
+            f"| {cell(value, 'greedy_solved', '{:.1f}')} |"
+        )
+
+    per_seed_lines = [
+        f"- strength {float(key):g}: "
+        + ", ".join(
+            "never" if run["episodes_to_first_success"] is None
+            else str(run["episodes_to_first_success"])
+            for run in experiment["runs"][key]
+        )
+        for key in sorted(experiment["runs"], key=float)
+    ]
+
+    first_diff = comparison["first_success_or_budget"]
+    final_diff = comparison["solved_fraction_final"]
+    greedy_diff = comparison["greedy_solved"]
+
+    # Every direction word below is read off the data rather than written by hand.
+    explored_sooner = first_diff["difference"] < 0
+    exploited_better = final_diff["difference"] > 0
+    overall = "helped" if exploited_better else "did not help"
+    exploration_word = "sooner" if explored_sooner else "later"
+    saturation = treatment / (1.0 - experiment["gamma"])
+    drowning = saturation > full_return
+
+    # Derived rather than written: which non-zero strength did best, and whether every non-zero
+    # strength found the chest on exactly the same episodes.
+    nonzero = sorted(float(key) for key in aggregates if float(key) > 0.0)
+    gentlest = min(nonzero) if nonzero else treatment
+    best_nonzero = max(nonzero, key=lambda s: stat(s, "solved_fraction_final")["mean"],
+                       default=treatment)
+    first_vectors = {
+        float(key): tuple(
+            run["episodes_to_first_success"] for run in experiment["runs"][key]
+        )
+        for key in experiment["runs"]
+    }
+    scale_invariant = (
+        len(nonzero) > 1
+        and len({first_vectors[s] for s in nonzero}) == 1
+        and first_vectors[nonzero[0]] != first_vectors[baseline]
+    )
+
+    verdict_paragraph = (
+        f"The bonus **{overall}**. On the metric it is designed for — how long until the agent "
+        f"first opens the chest — strength {treatment:g} got there {exploration_word} than the "
+        f"baseline, by {abs(first_diff['difference']):.0f} episodes on average. On the metrics "
+        f"that decide whether the level was actually learnt, it is "
+        f"{'ahead' if exploited_better else 'behind'}: over the final {window} episodes it solves "
+        f"{stat(treatment, 'solved_fraction_final')['mean']:.1%} against the baseline's "
+        f"{stat(baseline, 'solved_fraction_final')['mean']:.1%}, and its greedy policy solves the "
+        f"level on {stat(treatment, 'greedy_solved')['mean']:.0%} of seeds against the baseline's "
+        f"{stat(baseline, 'greedy_solved')['mean']:.0%}."
+    )
+
+    drowning_paragraph = (
+        f"The bonus is large relative to the reward it is meant to help find. The whole level pays "
+        f"{full_return:g}. A first arrival pays {treatment:g}, and on an "
+        f"{experiment['max_steps_per_episode']}-step episode the agent collects one on nearly "
+        f"every step, so the discounted intrinsic return of walking into fresh ground is worth "
+        f"about `strength / (1 - gamma)` = {saturation:.0f} — "
+        + (
+            f"roughly {saturation / full_return:.0f}x the chest itself. Once the table has learnt "
+            f"that, the greedy policy maximising it is a tour of unfamiliar cells rather than a "
+            f"route to the chest, and the +2 is a rounding error inside the target. This is the "
+            f"failure the plan named in one line: a large strength drowns the environment reward "
+            f"and teaches wandering."
+            if drowning
+            else f"less than the {full_return:g} the level pays, so drowning is not the "
+                 f"explanation here."
+        )
+    )
+
+    # Assembled before the template so no source line of it has to exceed the line limit: a
+    # markdown table row wrapped in the source would wrap in the output and stop being a table.
+    table_header = (
+        f"| strength | episodes solved | final {window} solved | episodes to first success "
+        f"| final mean return | greedy solves |"
+    )
+    reproduce = (
+        f"python -m train.train_gridworld --level {level} --intrinsic-sweep "
+        f"--intrinsic-seeds {' '.join(str(s) for s in seeds)}"
+    )
+
+    if scale_invariant:
+        shared = ", ".join(
+            "never" if value is None else str(value) for value in first_vectors[nonzero[0]]
+        )
+        scale_note = (
+            f"Every non-zero strength in the sweep first opened the chest on exactly the same "
+            f"episodes - {shared}, seed by seed - while the baseline took "
+            f"{', '.join('never' if v is None else str(v) for v in first_vectors[baseline])}. "
+            f"That is not a coincidence, and it is worth a line in the report. Until the first "
+            f"environment reward arrives, "
+            f"the *only* reward in the MDP is the bonus, the Q-table starts at "
+            f"zero, and every update is linear in the strength - so the whole table is exactly "
+            f"proportional to it. Scaling every entry of a row by a positive constant leaves the "
+            f"greedy choice and the tie set unchanged, so the behaviour policy is identical for "
+            f"any strength above zero, and the agent walks the same path until it finds the chest. "
+            f"The strength only begins to matter once there is a +2 for it to be weighed against. "
+            f"It also means the exploration half of this experiment has an effective sample of "
+            f"{n} runs, not {n} per strength."
+        )
+    else:
+        scale_note = (
+            "The non-zero strengths did not share a first-success pattern, so the exploration "
+            "effect here varies with the size of the bonus as well as with the seed."
+        )
+
+    text = f"""# Task 5 - intrinsic reward on level {level} (rubric row F)
+
+*Generated by `python -m train.train_gridworld --level {level} --intrinsic-sweep`. Figure:
+`{experiment['artifacts'].get('comparison_figure')}`. Raw numbers:
+`{experiment['artifacts'].get('experiment_json')}`.*
+
+## What was run
+
+Every transition adds a count-based exploration bonus to the reward the TD update sees:
+
+```
+r_i    = intrinsic_reward_strength / sqrt(n(s) + 1)
+target = (r + r_i) + gamma * bootstrap     # bootstrap = max_a' Q[s',a'] for Q-learning
+```
+
+`n(s)` is the number of times the current episode had already occupied the state the transition
+arrives in, counted **before** this arrival, and the counter is cleared at every `env.reset()`. It
+is novelty *within the episode*, not a lifetime count.
+
+The environment is untouched. `env.step()` returns exactly what it always returned; `r_i` is added
+to a local variable that only the TD target sees; and the return logged, plotted and tabulated
+below is the **environment** return, with the bonus excluded. That last point is what makes the
+comparison mean anything. A bonus is paid on almost every step, so a curve of shaped returns would
+sit strength {treatment:g} above strength {baseline:g} by roughly (steps per episode x bonus)
+whether or not the agent ever found the chest, and the figure would be evidence of nothing.
+
+Level {level} is the sparse one. The key pays 0 and only unlocks the chest; the chest pays +2 and
+only while the key is held; nothing else on the grid pays anything. An episode therefore scores
+exactly 0.0 or {full_return:.1f}, and the shortest solution is {experiment['bfs_optimum_steps']}
+steps: down a dead-end branch of the spiral to the key, then back out to the chest. An
+epsilon-greedy agent that has never seen a reward is a random walk, and a random walk on a
+one-cell-wide corridor takes on the order of the squared corridor length to reach the end of it.
+
+Configuration, all from `config/gridworld.yaml`: {algo.upper()}, {experiment['episodes']} episodes,
+alpha {experiment['alpha']}, gamma {experiment['gamma']}, epsilon {experiment['epsilon_start']} ->
+{experiment['epsilon_end']} over {experiment['epsilon_decay_episodes']} episodes, step cap
+{experiment['max_steps_per_episode']}, seeds {seeds}. Strengths {baseline:g} and {treatment:g} are
+the pair the `intrinsic_experiment` block names.
+
+## What was measured
+
+Mean over {n} seeds, plus or minus one standard error. "Final" means the last {window} episodes,
+which sit entirely after the epsilon schedule has finished decaying.
+
+{table_header}
+|---|---|---|---|---|---|
+{chr(10).join(rows)}
+
+Episodes until the first success, seed by seed, in the order {seeds}:
+
+{chr(10).join(per_seed_lines)}
+
+## Did the bonus help?
+
+{verdict_paragraph}
+
+Strength {treatment:g} minus strength {baseline:g}, with Welch standard errors:
+
+- share of the final {window} episodes solved: {diff_line('solved_fraction_final', '{:.3f}')}
+- share of all episodes solved: {diff_line('solved_fraction', '{:.3f}')}
+- mean environment return over the final {window}: {diff_line('mean_return_final', '{:.3f}')}
+- episodes until the first success: {diff_line('first_success_or_budget', '{:.0f}')}
+- greedy policy solves the level: {diff_line('greedy_solved', '{:.2f}')}
+
+The exploration metric and the exploitation metrics have to be read separately, because they
+disagree. Finding the chest and learning the route to it are different achievements, and this bonus
+buys the first at the cost of the second.
+
+### Why, part one: the bonus is the wrong size
+
+{drowning_paragraph}
+
+### Why, part two: a per-episode count is not a Markov reward
+
+This is the more interesting half for the report. `n(s)` is per-episode by construction, but the
+Q-table's state key is `(row, col, has_key, collected_mask)` and has no room for a visit count. The
+bonus is therefore not a Markov reward in the MDP the agent is actually solving: the same state
+pays a different bonus on its first and its fifth visit of an episode, and a table keyed without
+the count can only learn the average of those. A stationary greedy policy cannot express "go
+somewhere I have not been *this episode*"; the best it can represent is a fixed tour, and that is
+what it converges to. A count-based bonus driven by a *lifetime* count would not have this problem
+— the bonus would fade as training progressed and hand control back to the environment reward —
+but the brief specifies the per-episode form, so this is a property of the specified algorithm
+rather than of the implementation.
+
+### Why, part three: the damage is a dose, and {treatment:g} is an overdose
+
+The supporting sweep is what turns "the bonus hurt" into something more useful. The final success
+rate falls monotonically with the strength, and it does not begin to fall at the gentlest value
+tried: strength {gentlest:g} keeps
+{stat(gentlest, 'solved_fraction_final')['mean']:.1%} of the final window against the baseline's
+{stat(baseline, 'solved_fraction_final')['mean']:.1%}, and the best non-zero strength on that
+metric is {best_nonzero:g}. The exploration benefit, meanwhile, is the same at every non-zero
+strength (see below). So the shape of the result is not "count-based exploration does not work
+here" — it is "the reward it adds has to stay small next to the reward it is helping the agent
+find", and {treatment:g} is roughly {saturation / full_return:.0f} times too large by that measure.
+
+### Why, part four: the first success does not depend on the strength at all
+
+{scale_note}
+
+## What this is not
+
+With {n} seeds per arm, none of the differences above is a significance claim. The intervals quoted
+are Welch intervals at about {final_diff['welch_df']:.1f} degrees of freedom, roughly plus or minus
+2.8 standard errors wide, so only a very large effect clears zero at this sample size. Each bullet
+above says whether its own interval excludes zero. The defensible summary is that the exploitation
+result is consistent in direction across all {n} seeds
+(greedy success {greedy_diff['difference']:+.2f} on a 0-1 scale), while the exploration result is
+not pinned down by {n} seeds and should be quoted with its standard error or not at all.
+
+## Reproducing it
+
+```
+{reproduce}
+```
+
+Everything else - the strengths, the episode count, alpha, gamma, the epsilon schedule and the step
+cap - comes from `config/gridworld.yaml`.
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_rewrap_prose(text), encoding="utf-8")
+    return path
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--level", type=int, default=0, help="level index 0-6")
@@ -1515,6 +2326,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="seeds for --levels; each run's artifacts carry its own seed")
     parser.add_argument("--monster-samples", type=int, default=MONSTER_SAMPLES,
                         help="monster-observations behind the measured move rate (--levels only)")
+    parser.add_argument("--intrinsic-sweep", action="store_true",
+                        help="F / A3-007: run level 6 at each strength in the config's "
+                             "`intrinsic_experiment` block over several seeds, and write the "
+                             "comparison curve, the metrics and the written explanation")
+    parser.add_argument("--intrinsic-seeds", type=int, nargs="+", default=None,
+                        help="seeds for --intrinsic-sweep; the default is five, because on a "
+                             "level this sparse a single seed is an anecdote")
+    parser.add_argument("--intrinsic-strengths", type=float, nargs="+", default=None,
+                        help="supporting sweep: extra strengths run alongside the config's "
+                             "headline pair, into a second figure. The headline comparison "
+                             "always stays the pair named in the config")
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--no-artifacts", action="store_true",
                         help="train without writing to results/ (smoke runs only)")
@@ -1523,6 +2345,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    if args.intrinsic_sweep:
+        main_intrinsic(args)
+        return
     if args.levels:
         main_levels(args)
         return
@@ -1638,6 +2463,58 @@ def main_levels(args: argparse.Namespace) -> None:
               f"{measured['death_checks']['both_checks_fire']}")
     for name, path in report["artifacts"].items():
         print(f"  wrote {name}: {path}")
+
+
+def main_intrinsic(args: argparse.Namespace) -> None:
+    """`--intrinsic-sweep`: the F / A3-007 run. ASCII only - the console here is cp1252."""
+    seeds = args.intrinsic_seeds if args.intrinsic_seeds is not None else INTRINSIC_SEEDS
+    experiment = intrinsic_experiment(
+        # `--level` defaults to 0, which is not a level this experiment runs on; treat the default
+        # as "use the level the config's intrinsic_experiment block names".
+        level=args.level if args.level != 0 else None,
+        algo=args.algo,
+        seeds=seeds,
+        episodes=args.episodes,
+        epsilon_decay_episodes=args.epsilon_decay_episodes,
+        extra_strengths=args.intrinsic_strengths or (),
+        results_dir=args.results_dir,
+        write_artifacts=not args.no_artifacts,
+    )
+    baseline, treatment = (experiment["headline_strengths"][0],
+                           experiment["headline_strengths"][-1])
+    print(f"level {experiment['level']} intrinsic reward | {experiment['algo']} | "
+          f"{experiment['episodes']} episodes | seeds {experiment['seeds']} | "
+          f"step cap {experiment['max_steps_per_episode']}")
+    print("  r_i = strength / sqrt(n(s) + 1); n(s) resets every episode; the return below is the "
+          "ENVIRONMENT return")
+    for key in sorted(experiment["aggregates"], key=float):
+        entry = experiment["aggregates"][key]
+        first = entry["first_success_or_budget"]
+        censored = entry["censored_seeds"]
+        print(f"  strength {float(key):4g}: solved {entry['solved_fraction']['mean']:.1%} of "
+              f"episodes, {entry['solved_fraction_final']['mean']:.1%} in the final window; "
+              f"greedy solves {entry['greedy_solved']['mean']:.0%} of seeds")
+        print(f"                 first success at episode {first['mean']:.0f} +/- "
+              f"{first['sem']:.0f}"
+              + (f" ({censored}/{len(experiment['seeds'])} never solved)" if censored else ""))
+    print(f"  strength {treatment:g} minus strength {baseline:g} "
+          f"(difference of means +/- Welch standard error, n={len(experiment['seeds'])} per arm):")
+    for metric in ("solved_fraction_final", "first_success_or_budget", "greedy_solved"):
+        entry = experiment["comparison_treatment_minus_baseline"][metric]
+        verdict = (
+            "identical on every seed" if entry["zero_variance"]
+            else "excludes 0" if entry["significant_at_95"]
+            else "includes 0"
+        )
+        print(f"    {metric:24s} {entry['difference']:+9.3f} +/- {entry['standard_error']:.3f} "
+              f"(95% CI {entry['ci95_low']:+.3f} to {entry['ci95_high']:+.3f}, {verdict})")
+    helped = experiment["comparison_treatment_minus_baseline"]["solved_fraction_final"]
+    print(f"  verdict: the bonus {'HELPED' if helped['difference'] > 0 else 'DID NOT HELP'} on the "
+          f"final success rate")
+    print("  (a 5-seed experiment cannot support a significance claim either way; the intervals "
+          "above are what it does support)")
+    for name, target in experiment["artifacts"].items():
+        print(f"  wrote {name}: {target}")
 
 
 if __name__ == "__main__":

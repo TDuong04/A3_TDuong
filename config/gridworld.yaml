@@ -62,6 +62,31 @@ level_overrides:
     epsilon_decay_episodes: 10000
     max_steps_per_episode: 400
 
+  6:
+    # Level 6 is the only level whose step cap was tighter than its own layout. Its BFS optimum is
+    # 54 steps (start -> key 36, key -> chest 18), so the shared cap of 300 is 5.6x the optimum,
+    # against 14.3x on levels 4 and 5, 17.6x on level 0 and 8.8x on level 3 - the tightest in the
+    # set by a factor of two, and on a one-cell-wide spiral the cap is what an undirected agent
+    # runs out of first. 800 puts level 6 on the same 14.8x ratio levels 4 and 5 already use.
+    #
+    # Chosen from the ratio the other levels already had, and not by picking the cap that most
+    # flattered the intrinsic bonus - it flatters it least. Q-learning, 5000 episodes, seeds 0-4,
+    # share of episodes that opened the chest at strength 0.0 vs 0.5, and how many of the 5 seeds
+    # ended with a greedy policy that solves the level:
+    #
+    #   cap  300:  0.0% / 0.0%    greedy 0/5 vs 0/5   - neither arm ever solves it; the F-row
+    #                                                   figure would be two flat lines at zero
+    #   cap  400:  0.1% / 0.0%    greedy 0/5 vs 0/5
+    #   cap  500: 12.2% / 2.5%    greedy 3/5 vs 0/5
+    #   cap  600: 63.8% / 11.9%   greedy 5/5 vs 0/5
+    #   cap  800: 88.9% / 39.5%   greedy 5/5 vs 0/5   <- the budget below
+    #   cap 1000: 96.9% / 50.0%   greedy 5/5 vs 0/5
+    #
+    # The bonus loses at every cap, so the choice of cap is not what produces the F-row result;
+    # 300 would merely have hidden it behind two flat lines. `episodes` for the experiment comes
+    # from the `intrinsic_experiment` block above; a plain `--level 6` run uses the shared 3000.
+    max_steps_per_episode: 800
+
 rendering:
   cell_size: 56
   fps: 30           # frame rate of the window; training runs headless

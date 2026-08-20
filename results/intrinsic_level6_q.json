@@ -1,0 +1,1375 @@
+{
+  "level": 6,
+  "algo": "q",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "headline_strengths": [
+    0.0,
+    0.5
+  ],
+  "extra_strengths": [
+    0.1,
+    0.25,
+    1.0
+  ],
+  "episodes": 5000,
+  "alpha": 0.1,
+  "gamma": 0.95,
+  "epsilon_start": 1.0,
+  "epsilon_end": 0.05,
+  "epsilon_decay_episodes": 2000,
+  "max_steps_per_episode": 800,
+  "bfs_optimum_steps": 54,
+  "level_total_reward": 2.0,
+  "success_window": 500,
+  "formula": "r_i = intrinsic_reward_strength / sqrt(n(s) + 1)",
+  "n_of_s_definition": "occupancies of the state the transition arrives in, within the current episode, counted before this arrival; the counter is cleared at every env.reset()",
+  "plotted_quantity": "environment return per episode; the intrinsic bonus is excluded",
+  "aggregates": {
+    "0": {
+      "solved_fraction": {
+        "n": 5,
+        "values": [
+          0.8544,
+          0.8758,
+          0.8688,
+          0.8958,
+          0.9484
+        ],
+        "mean": 0.88864,
+        "sd": 0.03658343887608161,
+        "sem": 0.0163606112355254
+      },
+      "solved_fraction_final": {
+        "n": 5,
+        "values": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sd": 0.0,
+        "sem": 0.0
+      },
+      "first_success_or_budget": {
+        "n": 5,
+        "values": [
+          353.0,
+          275.0,
+          55.0,
+          147.0,
+          7.0
+        ],
+        "mean": 167.4,
+        "sd": 145.60494497097275,
+        "sem": 65.11651096304224
+      },
+      "mean_return": {
+        "n": 5,
+        "values": [
+          1.7088,
+          1.7516,
+          1.7376,
+          1.7916,
+          1.8968
+        ],
+        "mean": 1.77728,
+        "sd": 0.07316687775216323,
+        "sem": 0.0327212224710508
+      },
+      "mean_return_final": {
+        "n": 5,
+        "values": [
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0
+        ],
+        "mean": 2.0,
+        "sd": 0.0,
+        "sem": 0.0
+      },
+      "greedy_solved": {
+        "n": 5,
+        "values": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sd": 0.0,
+        "sem": 0.0
+      },
+      "censored_seeds": 0
+    },
+    "0.5": {
+      "solved_fraction": {
+        "n": 5,
+        "values": [
+          0.3946,
+          0.4086,
+          0.4104,
+          0.3972,
+          0.3656
+        ],
+        "mean": 0.39527999999999996,
+        "sd": 0.017965856506161913,
+        "sem": 0.008034575284356981
+      },
+      "solved_fraction_final": {
+        "n": 5,
+        "values": [
+          0.358,
+          0.38,
+          0.366,
+          0.258,
+          0.278
+        ],
+        "mean": 0.328,
+        "sd": 0.0557853027239254,
+        "sem": 0.024947945807220276
+      },
+      "first_success_or_budget": {
+        "n": 5,
+        "values": [
+          17.0,
+          106.0,
+          95.0,
+          26.0,
+          119.0
+        ],
+        "mean": 72.6,
+        "sd": 47.521574048004766,
+        "sem": 21.252293993825703
+      },
+      "mean_return": {
+        "n": 5,
+        "values": [
+          0.7892,
+          0.8172,
+          0.8208,
+          0.7944,
+          0.7312
+        ],
+        "mean": 0.7905599999999999,
+        "sd": 0.035931713012323827,
+        "sem": 0.016069150568713962
+      },
+      "mean_return_final": {
+        "n": 5,
+        "values": [
+          0.716,
+          0.76,
+          0.732,
+          0.516,
+          0.556
+        ],
+        "mean": 0.656,
+        "sd": 0.1115706054478508,
+        "sem": 0.04989589161444055
+      },
+      "greedy_solved": {
+        "n": 5,
+        "values": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "sd": 0.0,
+        "sem": 0.0
+      },
+      "censored_seeds": 0
+    },
+    "0.1": {
+      "solved_fraction": {
+        "n": 5,
+        "values": [
+          0.8764,
+          0.891,
+          0.879,
+          0.8892,
+          0.8652
+        ],
+        "mean": 0.8801599999999998,
+        "sd": 0.010470339058502372,
+        "sem": 0.00468247797645649
+      },
+      "solved_fraction_final": {
+        "n": 5,
+        "values": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sd": 0.0,
+        "sem": 0.0
+      },
+      "first_success_or_budget": {
+        "n": 5,
+        "values": [
+          17.0,
+          106.0,
+          95.0,
+          26.0,
+          119.0
+        ],
+        "mean": 72.6,
+        "sd": 47.521574048004766,
+        "sem": 21.252293993825703
+      },
+      "mean_return": {
+        "n": 5,
+        "values": [
+          1.7528,
+          1.782,
+          1.758,
+          1.7784,
+          1.7304
+        ],
+        "mean": 1.7603199999999997,
+        "sd": 0.020940678117004743,
+        "sem": 0.00936495595291298
+      },
+      "mean_return_final": {
+        "n": 5,
+        "values": [
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0
+        ],
+        "mean": 2.0,
+        "sd": 0.0,
+        "sem": 0.0
+      },
+      "greedy_solved": {
+        "n": 5,
+        "values": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sd": 0.0,
+        "sem": 0.0
+      },
+      "censored_seeds": 0
+    },
+    "0.25": {
+      "solved_fraction": {
+        "n": 5,
+        "values": [
+          0.7924,
+          0.8182,
+          0.7988,
+          0.8058,
+          0.7718
+        ],
+        "mean": 0.7974,
+        "sd": 0.017215690517664393,
+        "sem": 0.007699090855419225
+      },
+      "solved_fraction_final": {
+        "n": 5,
+        "values": [
+          0.92,
+          0.962,
+          0.914,
+          0.936,
+          0.976
+        ],
+        "mean": 0.9416,
+        "sd": 0.026735743864721592,
+        "sem": 0.011956588142108085
+      },
+      "first_success_or_budget": {
+        "n": 5,
+        "values": [
+          17.0,
+          106.0,
+          95.0,
+          26.0,
+          119.0
+        ],
+        "mean": 72.6,
+        "sd": 47.521574048004766,
+        "sem": 21.252293993825703
+      },
+      "mean_return": {
+        "n": 5,
+        "values": [
+          1.5848,
+          1.6364,
+          1.5976,
+          1.6116,
+          1.5436
+        ],
+        "mean": 1.5948,
+        "sd": 0.034431381035328786,
+        "sem": 0.01539818171083845
+      },
+      "mean_return_final": {
+        "n": 5,
+        "values": [
+          1.84,
+          1.924,
+          1.828,
+          1.872,
+          1.952
+        ],
+        "mean": 1.8832,
+        "sd": 0.053471487729443185,
+        "sem": 0.02391317628421617
+      },
+      "greedy_solved": {
+        "n": 5,
+        "values": [
+          0.0,
+          1.0,
+          1.0,
+          1.0,
+          0.0
+        ],
+        "mean": 0.6,
+        "sd": 0.5477225575051662,
+        "sem": 0.24494897427831783
+      },
+      "censored_seeds": 0
+    },
+    "1": {
+      "solved_fraction": {
+        "n": 5,
+        "values": [
+          0.4042,
+          0.4312,
+          0.3802,
+          0.4026,
+          0.363
+        ],
+        "mean": 0.39624000000000004,
+        "sd": 0.025923888597199317,
+        "sem": 0.011593515428893867
+      },
+      "solved_fraction_final": {
+        "n": 5,
+        "values": [
+          0.392,
+          0.338,
+          0.274,
+          0.288,
+          0.32
+        ],
+        "mean": 0.3224,
+        "sd": 0.04641982335166734,
+        "sem": 0.02075957610357206
+      },
+      "first_success_or_budget": {
+        "n": 5,
+        "values": [
+          17.0,
+          106.0,
+          95.0,
+          26.0,
+          119.0
+        ],
+        "mean": 72.6,
+        "sd": 47.521574048004766,
+        "sem": 21.252293993825703
+      },
+      "mean_return": {
+        "n": 5,
+        "values": [
+          0.8084,
+          0.8624,
+          0.7604,
+          0.8052,
+          0.726
+        ],
+        "mean": 0.7924800000000001,
+        "sd": 0.051847777194398634,
+        "sem": 0.023187030857787734
+      },
+      "mean_return_final": {
+        "n": 5,
+        "values": [
+          0.784,
+          0.676,
+          0.548,
+          0.576,
+          0.64
+        ],
+        "mean": 0.6448,
+        "sd": 0.09283964670333468,
+        "sem": 0.04151915220714412
+      },
+      "greedy_solved": {
+        "n": 5,
+        "values": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "sd": 0.0,
+        "sem": 0.0
+      },
+      "censored_seeds": 0
+    }
+  },
+  "comparison_treatment_minus_baseline": {
+    "solved_fraction": {
+      "treatment_mean": 0.39527999999999996,
+      "baseline_mean": 0.88864,
+      "difference": -0.49336,
+      "standard_error": 0.018227012920388242,
+      "welch_df": 5.823323966189728,
+      "ci95_low": -0.5402216502183181,
+      "ci95_high": -0.44649834978168185,
+      "significant_at_95": true,
+      "zero_variance": false,
+      "n_per_arm": [
+        5,
+        5
+      ]
+    },
+    "solved_fraction_final": {
+      "treatment_mean": 0.328,
+      "baseline_mean": 1.0,
+      "difference": -0.6719999999999999,
+      "standard_error": 0.024947945807220276,
+      "welch_df": 4.0,
+      "ci95_low": -0.7412554975608434,
+      "ci95_high": -0.6027445024391564,
+      "significant_at_95": true,
+      "zero_variance": false,
+      "n_per_arm": [
+        5,
+        5
+      ]
+    },
+    "first_success_or_budget": {
+      "treatment_mean": 72.6,
+      "baseline_mean": 167.4,
+      "difference": -94.80000000000001,
+      "standard_error": 68.49686124195766,
+      "welch_df": 4.842596075295534,
+      "ci95_low": -284.94728680767446,
+      "ci95_high": 95.34728680767444,
+      "significant_at_95": false,
+      "zero_variance": false,
+      "n_per_arm": [
+        5,
+        5
+      ]
+    },
+    "mean_return": {
+      "treatment_mean": 0.7905599999999999,
+      "baseline_mean": 1.77728,
+      "difference": -0.98672,
+      "standard_error": 0.036454025840776484,
+      "welch_df": 5.823323966189728,
+      "ci95_low": -1.0804433004366363,
+      "ci95_high": -0.8929966995633637,
+      "significant_at_95": true,
+      "zero_variance": false,
+      "n_per_arm": [
+        5,
+        5
+      ]
+    },
+    "mean_return_final": {
+      "treatment_mean": 0.656,
+      "baseline_mean": 2.0,
+      "difference": -1.3439999999999999,
+      "standard_error": 0.04989589161444055,
+      "welch_df": 4.0,
+      "ci95_low": -1.4825109951216868,
+      "ci95_high": -1.205489004878313,
+      "significant_at_95": true,
+      "zero_variance": false,
+      "n_per_arm": [
+        5,
+        5
+      ]
+    },
+    "greedy_solved": {
+      "treatment_mean": 0.0,
+      "baseline_mean": 1.0,
+      "difference": -1.0,
+      "standard_error": 0.0,
+      "welch_df": 4.0,
+      "ci95_low": -1.0,
+      "ci95_high": -1.0,
+      "significant_at_95": true,
+      "zero_variance": true,
+      "n_per_arm": [
+        5,
+        5
+      ]
+    }
+  },
+  "runs": {
+    "0": [
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 0,
+        "intrinsic_reward_strength": 0.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4272,
+        "solved_fraction": 0.8544,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 353,
+        "first_success_censored": false,
+        "first_success_or_budget": 353,
+        "mean_return": 1.7088,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 56.902,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0_seed0.csv",
+          "q_table": "results/qtable_level6_q_strength0_seed0.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 1,
+        "intrinsic_reward_strength": 0.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4379,
+        "solved_fraction": 0.8758,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 275,
+        "first_success_censored": false,
+        "first_success_or_budget": 275,
+        "mean_return": 1.7516,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 56.924,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0_seed1.csv",
+          "q_table": "results/qtable_level6_q_strength0_seed1.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 2,
+        "intrinsic_reward_strength": 0.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4344,
+        "solved_fraction": 0.8688,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 55,
+        "first_success_censored": false,
+        "first_success_or_budget": 55,
+        "mean_return": 1.7376,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 56.846,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0_seed2.csv",
+          "q_table": "results/qtable_level6_q_strength0_seed2.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 3,
+        "intrinsic_reward_strength": 0.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4479,
+        "solved_fraction": 0.8958,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 147,
+        "first_success_censored": false,
+        "first_success_or_budget": 147,
+        "mean_return": 1.7916,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 57.152,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0_seed3.csv",
+          "q_table": "results/qtable_level6_q_strength0_seed3.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 4,
+        "intrinsic_reward_strength": 0.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4742,
+        "solved_fraction": 0.9484,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 7,
+        "first_success_censored": false,
+        "first_success_or_budget": 7,
+        "mean_return": 1.8968,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 57.134,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0_seed4.csv",
+          "q_table": "results/qtable_level6_q_strength0_seed4.npz"
+        }
+      }
+    ],
+    "0.5": [
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 0,
+        "intrinsic_reward_strength": 0.5,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 1973,
+        "solved_fraction": 0.3946,
+        "solved_fraction_final": 0.358,
+        "episodes_to_first_success": 17,
+        "first_success_censored": false,
+        "first_success_or_budget": 17,
+        "mean_return": 0.7892,
+        "mean_return_final": 0.716,
+        "mean_steps_final": 638.262,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 0,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p5_seed0.csv",
+          "q_table": "results/qtable_level6_q_strength0p5_seed0.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 1,
+        "intrinsic_reward_strength": 0.5,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 2043,
+        "solved_fraction": 0.4086,
+        "solved_fraction_final": 0.38,
+        "episodes_to_first_success": 106,
+        "first_success_censored": false,
+        "first_success_or_budget": 106,
+        "mean_return": 0.8172,
+        "mean_return_final": 0.76,
+        "mean_steps_final": 616.256,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 1,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p5_seed1.csv",
+          "q_table": "results/qtable_level6_q_strength0p5_seed1.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 2,
+        "intrinsic_reward_strength": 0.5,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 2052,
+        "solved_fraction": 0.4104,
+        "solved_fraction_final": 0.366,
+        "episodes_to_first_success": 95,
+        "first_success_censored": false,
+        "first_success_or_budget": 95,
+        "mean_return": 0.8208,
+        "mean_return_final": 0.732,
+        "mean_steps_final": 626.902,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 1,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p5_seed2.csv",
+          "q_table": "results/qtable_level6_q_strength0p5_seed2.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 3,
+        "intrinsic_reward_strength": 0.5,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 1986,
+        "solved_fraction": 0.3972,
+        "solved_fraction_final": 0.258,
+        "episodes_to_first_success": 26,
+        "first_success_censored": false,
+        "first_success_or_budget": 26,
+        "mean_return": 0.7944,
+        "mean_return_final": 0.516,
+        "mean_steps_final": 683.038,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 1,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p5_seed3.csv",
+          "q_table": "results/qtable_level6_q_strength0p5_seed3.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 4,
+        "intrinsic_reward_strength": 0.5,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 1828,
+        "solved_fraction": 0.3656,
+        "solved_fraction_final": 0.278,
+        "episodes_to_first_success": 119,
+        "first_success_censored": false,
+        "first_success_or_budget": 119,
+        "mean_return": 0.7312,
+        "mean_return_final": 0.556,
+        "mean_steps_final": 670.234,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 1,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p5_seed4.csv",
+          "q_table": "results/qtable_level6_q_strength0p5_seed4.npz"
+        }
+      }
+    ],
+    "0.1": [
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 0,
+        "intrinsic_reward_strength": 0.1,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4382,
+        "solved_fraction": 0.8764,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 17,
+        "first_success_censored": false,
+        "first_success_or_budget": 17,
+        "mean_return": 1.7528,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 56.916,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p1_seed0.csv",
+          "q_table": "results/qtable_level6_q_strength0p1_seed0.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 1,
+        "intrinsic_reward_strength": 0.1,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4455,
+        "solved_fraction": 0.891,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 106,
+        "first_success_censored": false,
+        "first_success_or_budget": 106,
+        "mean_return": 1.782,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 56.818,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p1_seed1.csv",
+          "q_table": "results/qtable_level6_q_strength0p1_seed1.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 2,
+        "intrinsic_reward_strength": 0.1,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4395,
+        "solved_fraction": 0.879,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 95,
+        "first_success_censored": false,
+        "first_success_or_budget": 95,
+        "mean_return": 1.758,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 56.966,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p1_seed2.csv",
+          "q_table": "results/qtable_level6_q_strength0p1_seed2.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 3,
+        "intrinsic_reward_strength": 0.1,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4446,
+        "solved_fraction": 0.8892,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 26,
+        "first_success_censored": false,
+        "first_success_or_budget": 26,
+        "mean_return": 1.7784,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 57.158,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p1_seed3.csv",
+          "q_table": "results/qtable_level6_q_strength0p1_seed3.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 4,
+        "intrinsic_reward_strength": 0.1,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4326,
+        "solved_fraction": 0.8652,
+        "solved_fraction_final": 1.0,
+        "episodes_to_first_success": 119,
+        "first_success_censored": false,
+        "first_success_or_budget": 119,
+        "mean_return": 1.7304,
+        "mean_return_final": 2.0,
+        "mean_steps_final": 69.298,
+        "greedy_solved": true,
+        "greedy_steps": 66,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p1_seed4.csv",
+          "q_table": "results/qtable_level6_q_strength0p1_seed4.npz"
+        }
+      }
+    ],
+    "0.25": [
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 0,
+        "intrinsic_reward_strength": 0.25,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 3962,
+        "solved_fraction": 0.7924,
+        "solved_fraction_final": 0.92,
+        "episodes_to_first_success": 17,
+        "first_success_censored": false,
+        "first_success_or_budget": 17,
+        "mean_return": 1.5848,
+        "mean_return_final": 1.84,
+        "mean_steps_final": 146.112,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 0,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p25_seed0.csv",
+          "q_table": "results/qtable_level6_q_strength0p25_seed0.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 1,
+        "intrinsic_reward_strength": 0.25,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4091,
+        "solved_fraction": 0.8182,
+        "solved_fraction_final": 0.962,
+        "episodes_to_first_success": 106,
+        "first_success_censored": false,
+        "first_success_or_budget": 106,
+        "mean_return": 1.6364,
+        "mean_return_final": 1.924,
+        "mean_steps_final": 107.81,
+        "greedy_solved": true,
+        "greedy_steps": 54,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p25_seed1.csv",
+          "q_table": "results/qtable_level6_q_strength0p25_seed1.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 2,
+        "intrinsic_reward_strength": 0.25,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 3994,
+        "solved_fraction": 0.7988,
+        "solved_fraction_final": 0.914,
+        "episodes_to_first_success": 95,
+        "first_success_censored": false,
+        "first_success_or_budget": 95,
+        "mean_return": 1.5976,
+        "mean_return_final": 1.828,
+        "mean_steps_final": 153.45,
+        "greedy_solved": true,
+        "greedy_steps": 56,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p25_seed2.csv",
+          "q_table": "results/qtable_level6_q_strength0p25_seed2.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 3,
+        "intrinsic_reward_strength": 0.25,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 4029,
+        "solved_fraction": 0.8058,
+        "solved_fraction_final": 0.936,
+        "episodes_to_first_success": 26,
+        "first_success_censored": false,
+        "first_success_or_budget": 26,
+        "mean_return": 1.6116,
+        "mean_return_final": 1.872,
+        "mean_steps_final": 143.616,
+        "greedy_solved": true,
+        "greedy_steps": 66,
+        "greedy_return": 2.0,
+        "greedy_collected": 2,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p25_seed3.csv",
+          "q_table": "results/qtable_level6_q_strength0p25_seed3.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 4,
+        "intrinsic_reward_strength": 0.25,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 3859,
+        "solved_fraction": 0.7718,
+        "solved_fraction_final": 0.976,
+        "episodes_to_first_success": 119,
+        "first_success_censored": false,
+        "first_success_or_budget": 119,
+        "mean_return": 1.5436,
+        "mean_return_final": 1.952,
+        "mean_steps_final": 96.512,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 1,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength0p25_seed4.csv",
+          "q_table": "results/qtable_level6_q_strength0p25_seed4.npz"
+        }
+      }
+    ],
+    "1": [
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 0,
+        "intrinsic_reward_strength": 1.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 2021,
+        "solved_fraction": 0.4042,
+        "solved_fraction_final": 0.392,
+        "episodes_to_first_success": 17,
+        "first_success_censored": false,
+        "first_success_or_budget": 17,
+        "mean_return": 0.8084,
+        "mean_return_final": 0.784,
+        "mean_steps_final": 616.65,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 0,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength1_seed0.csv",
+          "q_table": "results/qtable_level6_q_strength1_seed0.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 1,
+        "intrinsic_reward_strength": 1.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 2156,
+        "solved_fraction": 0.4312,
+        "solved_fraction_final": 0.338,
+        "episodes_to_first_success": 106,
+        "first_success_censored": false,
+        "first_success_or_budget": 106,
+        "mean_return": 0.8624,
+        "mean_return_final": 0.676,
+        "mean_steps_final": 637.164,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 1,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength1_seed1.csv",
+          "q_table": "results/qtable_level6_q_strength1_seed1.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 2,
+        "intrinsic_reward_strength": 1.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 1901,
+        "solved_fraction": 0.3802,
+        "solved_fraction_final": 0.274,
+        "episodes_to_first_success": 95,
+        "first_success_censored": false,
+        "first_success_or_budget": 95,
+        "mean_return": 0.7604,
+        "mean_return_final": 0.548,
+        "mean_steps_final": 670.34,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 0,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength1_seed2.csv",
+          "q_table": "results/qtable_level6_q_strength1_seed2.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 3,
+        "intrinsic_reward_strength": 1.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 2013,
+        "solved_fraction": 0.4026,
+        "solved_fraction_final": 0.288,
+        "episodes_to_first_success": 26,
+        "first_success_censored": false,
+        "first_success_or_budget": 26,
+        "mean_return": 0.8052,
+        "mean_return_final": 0.576,
+        "mean_steps_final": 666.424,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 1,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength1_seed3.csv",
+          "q_table": "results/qtable_level6_q_strength1_seed3.npz"
+        }
+      },
+      {
+        "level": 6,
+        "algo": "q",
+        "seed": 4,
+        "intrinsic_reward_strength": 1.0,
+        "episodes": 5000,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay_episodes": 2000,
+        "max_steps_per_episode": 800,
+        "n_collectibles": 2,
+        "bfs_optimum_steps": 54,
+        "solved_episodes": 1815,
+        "solved_fraction": 0.363,
+        "solved_fraction_final": 0.32,
+        "episodes_to_first_success": 119,
+        "first_success_censored": false,
+        "first_success_or_budget": 119,
+        "mean_return": 0.726,
+        "mean_return_final": 0.64,
+        "mean_steps_final": 642.644,
+        "greedy_solved": false,
+        "greedy_steps": 800,
+        "greedy_return": 0.0,
+        "greedy_collected": 0,
+        "success_window": 500,
+        "artifacts": {
+          "history_csv": "results/history_level6_q_strength1_seed4.csv",
+          "q_table": "results/qtable_level6_q_strength1_seed4.npz"
+        }
+      }
+    ]
+  },
+  "artifacts": {
+    "comparison_figure": "results/intrinsic_level6_q_curve.png",
+    "sweep_figure": "results/intrinsic_level6_q_sweep.png",
+    "explanation_markdown": "results/intrinsic_level6_q.md",
+    "experiment_json": "results/intrinsic_level6_q.json"
+  }
+}

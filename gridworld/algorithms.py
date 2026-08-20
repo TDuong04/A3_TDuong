@@ -40,7 +40,9 @@ action for the next step is selected at the end of the current one and carried f
 Intrinsic reward (Task 5, A3-007) is added by the caller, not baked in here: the agent maintains a
 per-episode visit counter `n(s)`, computes `r_i = strength / sqrt(n(s) + 1)`, and passes `r + r_i`
 as the reward for the update. Environment rewards stay unchanged, and the counter resets every
-episode.
+episode. That caller is `train_with_intrinsic_reward` further down this file — a separate loop, so
+that `q_learning` and `sarsa` keep the exact bodies their tests were written against. At
+`intrinsic_reward_strength = 0.0` the two paths are numerically identical, and a test pins that.
 
 Every hyperparameter arrives inside a `TabularConfig` loaded from `config/gridworld.yaml`. Nothing
 in this module names a numeric value for episodes, alpha, gamma or the epsilon bounds — rubric B3
@@ -60,7 +62,7 @@ BFS so the two numbers can be compared.
 from __future__ import annotations
 
 import csv
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import permutations
@@ -341,6 +343,178 @@ def sarsa(
 
     return TrainingResult(
         algo="sarsa", level=env.level_index, q_table=q, history=history, config=config
+    )
+
+
+# --- intrinsic reward (Task 5, A3-007, rubric F) ------------------------------------------------
+
+
+def intrinsic_reward(strength: float, visits: int) -> float:
+    """The brief's bonus, verbatim: `r_i = strength / sqrt(n(s) + 1)`.
+
+    Written as one tiny function so the formula has a single definition that a test can probe at
+    several visit counts, rather than being an expression buried in a training loop where the only
+    way to check it is to re-derive it from a learning curve.
+
+    `visits` is `n(s)`: how many times the agent has *already* occupied `s` during the current
+    episode, so a state entered for the first time this episode has `n(s) = 0` and earns the full
+    `strength`. The `+ 1` is what keeps that first visit finite; it is not an off-by-one.
+    """
+    if visits < 0:
+        raise ValueError(f"n(s) cannot be negative, got {visits}")
+    return float(strength) / float(np.sqrt(visits + 1.0))
+
+
+class EpisodeVisitCounts:
+    """`n(s)` — visits to each state **within the current episode**, cleared on every reset.
+
+    Per-episode and not lifetime, and that is the whole character of the bonus. A lifetime count
+    decays away after the first few hundred episodes and stops driving anything; an episode-local
+    count pays the agent, every single episode, for reaching states it has not reached *yet this
+    episode*. On a long corridor that is exactly the incentive to keep walking forward instead of
+    oscillating in the first few cells, which is what an epsilon-greedy random walk otherwise does.
+
+    Keyed by the env's full state tuple `(row, col, has_key, collected_mask)` rather than by
+    position: on level 6 the same corridor cell before and after picking up the key are genuinely
+    different situations, and merging them would tell the agent the whole return journey is stale.
+    """
+
+    def __init__(self) -> None:
+        self._counts: Counter[State] = Counter()
+
+    def reset(self) -> None:
+        """Start a new episode. Criterion 2 of the ticket lives on this line being called."""
+        self._counts.clear()
+
+    def visits(self, state: State) -> int:
+        """`n(s)` as it stands now, without recording anything."""
+        return int(self._counts[state])
+
+    def record(self, state: State) -> int:
+        """Count an occupancy of `state` and return `n(s)` as it stood *before* this one.
+
+        Returning the prior count is deliberate: the bonus pays for the novelty of an arrival, so
+        the arrival being counted must not inflate its own denominator. A state entered for the
+        first time this episode therefore reports `n(s) = 0` and earns the full `strength`.
+        """
+        before = int(self._counts[state])
+        self._counts[state] = before + 1
+        return before
+
+    def __len__(self) -> int:
+        """How many distinct states this episode has touched — the coverage the bonus is buying."""
+        return len(self._counts)
+
+
+def train_with_intrinsic_reward(
+    env: GridWorld,
+    config: TabularConfig,
+    *,
+    algo: str = "q",
+    rng: np.random.Generator | None = None,
+    q_table: QTable | None = None,
+) -> TrainingResult:
+    """Q-learning or SARSA with a per-episode count-based exploration bonus (rubric F).
+
+    **Which state `n(s)` refers to: the state the transition arrives in.** For a transition
+    `(s, a) -> s'` the bonus is `strength / sqrt(n(s') + 1)`, where `n(s')` is how many times this
+    episode had already occupied `s'` *before* this arrival. The episode's starting state is
+    counted as an occupancy at reset, so returning to it later is correctly seen as a revisit, and
+    every state the episode passes through is counted exactly once per occupancy. The rule is the
+    same for both algorithms.
+
+    The alternative reading — score the state being *left* — was implemented and measured first,
+    and it is strictly worse here, for a reason worth recording. `n(s)` is identical for all four
+    actions available at `s`, so a bonus keyed on the state being left adds the same constant to
+    every entry of `Q[s]` and can only steer the policy indirectly, one bootstrap step later.
+    Keyed on `s'` the bonus differs per action at the moment it is paid, which is what "prefer the
+    move into unfamiliar ground" has to mean. Measured on level 6 over 5000 episodes, seeds 0-2,
+    strength 0.5 and a 600-step cap: keyed on `s'` the chest was first opened around episode 350
+    and in about 14% of episodes; keyed on `s` it was never opened at all, on any seed.
+
+    The mechanics, in the order the ticket states them:
+
+      1. `n(s)` is a per-episode counter, cleared by `EpisodeVisitCounts.reset()` at every
+         `env.reset()`. It is novelty *within this episode*, not a lifetime count.
+      2. `r_i = strength / sqrt(n(s) + 1)`, from `intrinsic_reward`, with `strength` read from
+         `config.intrinsic_reward_strength` — no literal at any call site.
+      3. The environment is untouched. `env.step()` returns exactly what it always returned; `r_i`
+         is added to a *local* variable that only the TD target sees.
+      4. The logged and plotted `total_return` sums the **environment** reward alone. Logging
+         `r + r_i` would lift the bonus curve above the baseline for a trivial reason — the bonus is
+         paid on every step — and the comparison the figure is supposed to make would be vacuous.
+
+    At `intrinsic_reward_strength = 0.0` every `r_i` is exactly `0.0` and this loop is, draw for
+    draw and float for float, the same computation as `q_learning`/`sarsa` on the same seed. That is
+    a test, not a hope: it is the only way to know the bonus is the only thing this function adds.
+
+    The loop is written out rather than delegated because `q_learning` and `sarsa` are independently
+    verified code that this ticket must not touch. The cost is that a future fix to those update
+    rules has to be mirrored here; `tests/test_gridworld_intrinsic.py` pins the strength-0 case
+    against both originals, so the mirror breaking is a red test rather than a silent divergence.
+    """
+    if algo not in {"q", "sarsa"}:
+        raise ValueError(f"unknown algo {algo!r}; expected 'q' or 'sarsa'")
+
+    rng = make_rng(config.seed) if rng is None else rng
+    schedule = epsilon_schedule(config)
+    q = make_q_table() if q_table is None else q_table
+    strength = float(config.intrinsic_reward_strength)
+    counts = EpisodeVisitCounts()
+    history: list[EpisodeRecord] = []
+
+    for episode in range(config.episodes):
+        epsilon = schedule(episode)
+        state = env.reset()
+        counts.reset()  # criterion 2: `n(s)` is a within-episode count and starts again here
+        counts.record(state)  # the start state is occupied at t=0, so a later return is a revisit
+        total_return = 0.0
+        # SARSA commits to its first action before stepping; Q-learning chooses inside the loop.
+        action = select_action(q[state], epsilon, rng) if algo == "sarsa" else None
+
+        while True:
+            if algo == "q":
+                action = select_action(q[state], epsilon, rng)
+            next_state, reward, done, info = env.step(action)
+            # The environment return, and only that, is what gets logged and plotted.
+            total_return += reward
+
+            # The bonus scores the state ARRIVED IN, counted before this arrival is recorded.
+            shaped = reward + intrinsic_reward(strength, counts.record(next_state))
+
+            if info["terminated"]:
+                next_action = None
+                target = shaped
+            elif algo == "q":
+                target = shaped + config.gamma * float(q[next_state].max())
+            else:
+                next_action = select_action(q[next_state], epsilon, rng)
+                target = shaped + config.gamma * float(q[next_state][next_action])
+
+            q[state][action] += config.alpha * (target - q[state][action])
+
+            if done:
+                break
+            state = next_state
+            if algo == "sarsa":
+                action = next_action
+
+        history.append(
+            EpisodeRecord(
+                episode=episode,
+                total_return=total_return,
+                steps=info["steps"],
+                died=bool(info["died"]),
+                collected=int(info["collected"]),
+                epsilon=epsilon,
+            )
+        )
+        # The shaped return is deliberately never stored: the history CSV is the report's return
+        # series, and a column of bonus-inflated returns sitting next to it is an invitation to
+        # plot the wrong one.
+
+    return TrainingResult(
+        algo=algo, level=env.level_index, q_table=q, history=history, config=config
     )
 
 

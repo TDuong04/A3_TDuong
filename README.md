@@ -45,6 +45,8 @@ python -m train.train_gridworld --level 0 --algo q
 python -m train.train_gridworld --level 1 --algo sarsa
 python -m train.train_gridworld --level 1 --compare    # C3: both algorithms, one config,
                                                        # side-by-side policy figure + death rates
+python -m train.train_gridworld --levels 2 3 4 5 --seeds 0 1 2   # D + monsters: order, rates
+python -m train.train_gridworld --level 6 --intrinsic-sweep     # F: intrinsic reward, 0.0 vs 0.5
 python -m eval.play_gridworld --level 1 --compare      # the same contrast animated, for the video
                                                        # (not yet implemented — see A3-015)
 
