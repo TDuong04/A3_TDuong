@@ -8,9 +8,10 @@ alpha 0.1, gamma 0.95, and the same linear epsilon schedule (1.0 -> 0.05 over 60
 built by the same `epsilon_schedule()` function, from the same config block. The two runs differ
 in exactly one line of code: the bootstrap term of the update.
 
-Level 1 places a wall of fire along row 8 between the start at (8,0) and the apple at (8,9). The
-shortest safe route is 11 steps and runs along row 7, the row directly above the fire; any route
-further from the fire is longer.
+Level 1 places a wall of fire along row 8 between the start at (8,0) and the apple at (8,9). Two
+routes tie for the 11-step optimum: one along row 7 directly above the fire and one along row 9
+directly below it. Both run the length of the wall one cell away from it, so the shortest route
+is necessarily a fire-hugging one, and any route that keeps further away is longer.
 
 ## What the two agents learned
 
@@ -29,8 +30,8 @@ further from the fire is longer.
 Q-learning's target is `r + gamma * max_a' Q[s',a']`. The max is taken over the *best* action
 available at the successor state, so the value it learns is the value of a policy that never
 explores. Standing next to the fire is therefore free: the agent evaluates itself as if it will
-always choose to walk sideways, never down. It converges on the shortest route, which hugs row
-7.
+always choose to walk sideways, never down. It converges on one of the two optimal routes,
+hugging row 7.
 
 SARSA's target is `r + gamma * Q[s',a']`, where `a'` is the action the epsilon-greedy behaviour
 policy actually goes on to take. Some fraction of the time that action is a random one, and next
@@ -51,6 +52,13 @@ The death rates are the same statement without the picture. With exploration swi
 tables are safe, because neither greedy route ever steps into the fire. Restore the exploration
 the agent trained under and the routes separate: Q-learning dies in 12.0% of episodes against
 SARSA's 1.8%. SARSA pays 2 extra steps for that.
+
+State the result as the table states it — SARSA's greedy route is 13 steps via rows [6, 7, 8],
+and it dies several times less often at the exploration it trained under. "SARSA never goes near
+the fire" is stronger than the evidence supports: on some seeds its route descends its final
+column early and clips one fire-adjacent cell, which lifts its death rate to around 4% while
+still leaving it well clear of Q-learning's. The direction of the effect is stable across seeds;
+the claim that its route is fire-free is not.
 
 This is also why the effect depends on `epsilon_end`. As epsilon approaches zero the behaviour
 policy converges on the greedy policy, `Q[s',a']` converges on `max_a' Q[s',a']`, and the two

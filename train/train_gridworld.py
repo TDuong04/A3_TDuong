@@ -446,7 +446,7 @@ def _draw_level_background(axis, grid, bit_cells, mask: int, n_rows: int, n_cols
     axis.set_yticks(range(n_rows))
     axis.set_aspect("equal")
     axis.grid(alpha=0.2)
-    axis.tick_params(labelsize=7)
+    axis.tick_params(labelsize=10)
 
 
 # --- run ----------------------------------------------------------------------------------------
@@ -739,10 +739,18 @@ def plot_policy_comparison(
             axis.quiver(xs, ys, us, vs, angles="xy", scale_units="xy", scale=1.0, color=colour,
                         width=0.006, zorder=3)
 
+        # The route is a wide translucent corridor UNDERNEATH the arrows (zorder 3), not a solid
+        # line over them. Drawn on top at linewidth 3 it hid Q-learning's row-7 arrows entirely --
+        # and those arrows, running parallel to the fire, are the whole visual claim of this panel.
+        # SARSA's route leaves row 7 visible, so the defect silently weakened one half of a
+        # side-by-side comparison. Both layers stay below zorder 3 for that reason.
         route = rollout.path
-        axis.plot([c for _, c in route], [r for r, _ in route], color=colour, linewidth=3.0,
-                  alpha=0.85, zorder=5, label="greedy route")
-        axis.plot(route[0][1], route[0][0], marker="s", color=colour, markersize=10, zorder=6)
+        route_x = [c for _, c in route]
+        route_y = [r for r, _ in route]
+        axis.plot(route_x, route_y, color=colour, linewidth=9.0, alpha=0.20,
+                  solid_capstyle="round", zorder=2.0, label="greedy route")
+        axis.plot(route_x, route_y, color=colour, linewidth=1.0, alpha=0.55, zorder=2.5)
+        axis.plot(route[0][1], route[0][0], marker="s", color=colour, markersize=11, zorder=6)
 
         greedy = summary["death_rates"]["greedy"]
         behaviour = summary["death_rates"]["behaviour"]
@@ -751,15 +759,15 @@ def plot_policy_comparison(
             f"greedy route {rollout.steps} steps via rows {_route_rows(rollout)}\n"
             f"death rate: {greedy['death_rate']:.1%} greedy, "
             f"{behaviour['death_rate']:.1%} at eps={behaviour['epsilon']}",
-            fontsize=10,
+            fontsize=13,
         )
-        axis.legend(loc="upper right", fontsize=8)
+        axis.legend(loc="upper right", fontsize=11)
 
     any_summary = next(iter(summaries.values()))
     config: TabularConfig = any_summary["result"].config
     figure.suptitle(
         f"Level {level} cliff walk — greedy policy after identical training (seed {config.seed})",
-        fontsize=13,
+        fontsize=16,
     )
     # Two short lines rather than one long one: at this figure width a single caption runs off
     # both edges, and the caption is what makes the panels readable at report scale.
@@ -773,7 +781,7 @@ def plot_policy_comparison(
         f"square = start · circle = apple",
         ha="center",
         va="bottom",
-        fontsize=9,
+        fontsize=11,
     )
     figure.tight_layout(rect=(0.0, 0.075, 1.0, 0.955))
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -828,8 +836,9 @@ episodes) built by the same `epsilon_schedule()` function, from the same config 
 differ in exactly one line of code: the bootstrap term of the update.
 
 Level {level} places a wall of fire along row 8 between the start at (8,0) and the apple at (8,9).
-The shortest safe route is {optimum} steps and runs along row 7, the row directly above the fire;
-any route further from the fire is longer.
+Two routes tie for the {optimum}-step optimum: one along row 7 directly above the fire and one
+along row 9 directly below it. Both run the length of the wall one cell away from it, so the
+shortest route is necessarily a fire-hugging one, and any route that keeps further away is longer.
 
 ## What the two agents learned
 
@@ -848,7 +857,8 @@ any route further from the fire is longer.
 Q-learning's target is `r + gamma * max_a' Q[s',a']`. The max is taken over the *best* action
 available at the successor state, so the value it learns is the value of a policy that never
 explores. Standing next to the fire is therefore free: the agent evaluates itself as if it will
-always choose to walk sideways, never down. It converges on the shortest route, which hugs row 7.
+always choose to walk sideways, never down. It converges on one of the two optimal routes, hugging
+row 7.
 
 SARSA's target is `r + gamma * Q[s',a']`, where `a'` is the action the epsilon-greedy behaviour
 policy actually goes on to take. Some fraction of the time that action is a random one, and next to
@@ -869,6 +879,13 @@ The death rates are the same statement without the picture. With exploration swi
 tables are safe, because neither greedy route ever steps into the fire. Restore the exploration the
 agent trained under and the routes separate: Q-learning dies in {q_beh_rate} of episodes against
 SARSA's {sarsa_beh_rate}. SARSA pays {sarsa_roll.steps - q_roll.steps} extra steps for that.
+
+State the result as the table states it — SARSA's greedy route is {sarsa_roll.steps} steps via rows
+{_route_rows(sarsa_roll)}, and it dies several times less often at the exploration it trained under.
+"SARSA never goes near the fire" is stronger than the evidence supports: on some seeds its route
+descends its final column early and clips one fire-adjacent cell, which lifts its death rate to
+around 4% while still leaving it well clear of Q-learning's. The direction of the effect is stable
+across seeds; the claim that its route is fire-free is not.
 
 This is also why the effect depends on `epsilon_end`. As epsilon approaches zero the behaviour
 policy converges on the greedy policy, `Q[s',a']` converges on `max_a' Q[s',a']`, and the two

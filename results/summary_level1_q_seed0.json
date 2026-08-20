@@ -16,6 +16,19 @@
   "greedy_return": 1.0,
   "greedy_died": false,
   "greedy_truncated": false,
+  "solved": true,
+  "collection_order": [
+    {
+      "tile": "A",
+      "cell": [
+        8,
+        9
+      ],
+      "step": 11
+    }
+  ],
+  "collection_order_text": "A(8,9)@11",
+  "key_precedes_chest": null,
   "optimal": true,
   "stochastic_level": false,
   "mean_return_last_100": 0.89,

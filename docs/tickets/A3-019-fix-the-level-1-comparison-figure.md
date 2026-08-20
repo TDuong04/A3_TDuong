@@ -2,7 +2,7 @@
 id: A3-019
 title: Fix the level 1 comparison figure for report and video use
 type: bug
-status: open
+status: done
 priority: P1
 rubric: C
 points_at_risk: 3.0
@@ -38,12 +38,12 @@ tick labels from 7pt to 3.8pt. Legible at full size, marginal below about 80%. T
 
 ## Acceptance criteria
 
-- [ ] Route line no longer hides the policy arrows — thin it, drop its alpha, or reorder zorder so
+- [x] Route line no longer hides the policy arrows — thin it, drop its alpha, or reorder zorder so
       both read at once. Verify by reopening the PNG and confirming Q-learning's row-7 arrows are
       visible.
-- [ ] Font sizes raised so the figure stays legible at 60% scale, or the figure re-proportioned for
+- [x] Font sizes raised so the figure stays legible at 60% scale, or the figure re-proportioned for
       a full-width landscape placement
-- [ ] Regenerated for seeds 0 and 1, and the markdown regenerated alongside so prose and figure
+- [x] Regenerated for seeds 0 and 1, and the markdown regenerated alongside so prose and figure
       cannot drift
 
 ## Notes
@@ -62,3 +62,13 @@ Two prose corrections belong with this, both in `train/train_gridworld.py`'s gen
 - 2026-08-20 — raised from the A3-004 evaluation; the result is verified, the artifact is not
   communicating it
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/19
+- 2026-08-20 — fixed. The route is now a wide translucent corridor at zorder 2.0 with a 1px centre
+  line at 2.5, both below the arrow field at zorder 3, so nothing the panel exists to show can be
+  covered. Confirmed by reopening the regenerated PNG: Q-learning's row-7 arrows read clearly,
+  pointing right, parallel to the fire, inside its own route band. Panel titles 10 -> 13pt, legend
+  8 -> 11, caption 9 -> 11, suptitle 13 -> 16, tick labels 7 -> 10, which holds at the 60% scale a
+  10-page report will force. Both prose corrections applied: the optimum is now described as two
+  tied 11-step routes (row 7 above the fire, row 9 below), and a paragraph now states the SARSA
+  result as route length plus rows used and explicitly retires the stronger "never near the fire"
+  phrasing, since on some seeds its route clips one fire-adjacent cell. Regenerated for seeds 0 and
+  1; both still report ROUTES DIFFER. Closed.

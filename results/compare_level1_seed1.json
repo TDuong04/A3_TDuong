@@ -74,6 +74,12 @@
           "rollouts": 500,
           "deaths": 0,
           "death_rate": 0.0,
+          "successes": 500,
+          "success_rate": 1.0,
+          "truncations": 0,
+          "truncation_rate": 0.0,
+          "n_collectibles": 1,
+          "mean_collected": 1.0,
           "mean_steps": 11.0,
           "mean_return": 1.0
         },
@@ -82,6 +88,12 @@
           "rollouts": 500,
           "deaths": 60,
           "death_rate": 0.12,
+          "successes": 440,
+          "success_rate": 0.88,
+          "truncations": 0,
+          "truncation_rate": 0.0,
+          "n_collectibles": 1,
+          "mean_collected": 0.88,
           "mean_steps": 11.002,
           "mean_return": 0.88
         }
@@ -165,6 +177,12 @@
           "rollouts": 500,
           "deaths": 0,
           "death_rate": 0.0,
+          "successes": 500,
+          "success_rate": 1.0,
+          "truncations": 0,
+          "truncation_rate": 0.0,
+          "n_collectibles": 1,
+          "mean_collected": 1.0,
           "mean_steps": 13.0,
           "mean_return": 1.0
         },
@@ -173,6 +191,12 @@
           "rollouts": 500,
           "deaths": 9,
           "death_rate": 0.018,
+          "successes": 491,
+          "success_rate": 0.982,
+          "truncations": 0,
+          "truncation_rate": 0.0,
+          "n_collectibles": 1,
+          "mean_collected": 0.982,
           "mean_steps": 13.716,
           "mean_return": 0.982
         }
