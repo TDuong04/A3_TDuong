@@ -47,13 +47,26 @@ phases:
 
 player:
   max_health: 5
-  speed: 220              # style 2: pixels/second
-  thrust: 400             # style 1: pixels/second^2
-  rotation_speed: 200     # degrees/second
-  drag: 0.9
+  speed: 220              # max speed, pixels/second - the SAME cap for both control styles
+  thrust: 400             # pixels/second^2 - the same acceleration for both control styles
+  rotation_speed: 200     # degrees/second (style 1 only; style 2 faces where it moves)
+  drag: 0.9               # velocity retained per second of coasting, applied as drag ** dt
   shoot_cooldown: 0.25    # seconds
-  bullet_speed: 520
+  bullet_speed: 520       # pixels/second
   invulnerability_time: 0.6  # seconds after taking a hit
+  radius: 14              # collision radius, pixels (collision is circle-vs-circle)
+
+# Geometry and damage for everything that is not the player. Collision is circle-vs-circle, so
+# every entity needs a radius; `max_bullets` is the live cap that stops an uncapped bullet list
+# from slowing step() to a crawl deep into a 400k-timestep run.
+entities:
+  enemy_radius: 12
+  spawner_radius: 22
+  bullet_radius: 4
+  bullet_damage: 1
+  bullet_lifetime: 1.6    # seconds before a missed shot expires
+  max_bullets: 12
+  enemy_contact_damage: 1
 
 evaluation:
   deterministic: true
