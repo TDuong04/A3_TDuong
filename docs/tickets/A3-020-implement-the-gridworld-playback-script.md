@@ -2,7 +2,7 @@
 id: A3-020
 title: Implement the gridworld playback script
 type: feature
-status: open
+status: done
 priority: P0
 rubric: V
 points_at_risk: 5.0
@@ -42,15 +42,15 @@ traceback.
 
 ## Acceptance criteria
 
-- [ ] `python -m eval.play_gridworld --level N --algo q|sarsa` loads the saved Q-table from
+- [x] `python -m eval.play_gridworld --level N --algo q|sarsa` loads the saved Q-table from
       `results/` and animates the greedy policy in a Pygame window
-- [ ] Policy-arrow overlay toggleable and ON by default, so "follows a learned policy" is visible
+- [x] Policy-arrow overlay toggleable and ON by default, so "follows a learned policy" is visible
       rather than inferred — this is the single most valuable frame in the Part I footage
-- [ ] `--compare` runs Q-learning and SARSA on level 1 at once, so the route difference is visible
+- [x] `--compare` runs Q-learning and SARSA on level 1 at once, so the route difference is visible
       in motion rather than as a static figure
-- [ ] Works on a level with monsters (4 or 5) with monster movement visibly stochastic
-- [ ] Fails with a clear message, not a traceback, when the requested Q-table has not been trained
-- [ ] `README.md`'s "not yet implemented" annotation removed once it is true
+- [x] Works on a level with monsters (4 or 5) with monster movement visibly stochastic
+- [x] Fails with a clear message, not a traceback, when the requested Q-table has not been trained
+- [x] `README.md`'s "not yet implemented" annotation removed once it is true
 
 ## Notes
 
@@ -67,3 +67,28 @@ substitute and cheaper than maintaining a frame dumper.
   Part I artifact actually serves, rather than by a test failing: nothing fails, because nothing
   tests a script that raises `NotImplementedError` by design.
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/20
+- 2026-08-20 - implemented. `eval/play_gridworld.py` loads the trained table for a level and
+  algorithm, plays it greedily in a Pygame window with the policy arrows on by default, and
+  restarts the episode a moment after it ends - the auto-restart is the difference between "here
+  is a rollout" and "here is a policy", since a level-0 episode is eleven steps and under two
+  seconds of footage. `--compare` runs Q-learning and SARSA as two panels in one window, stepping
+  and restarting together so the two routes on screen are always the same episode number. All four
+  documented modes were smoke-run headless under `SDL_VIDEODRIVER=dummy`.
+- 2026-08-20 - the dev agent hit a session limit before writing any tests, so the suite was written
+  in the main session: `tests/test_play_gridworld.py`, 19 tests, suite 566 -> 585 passed.
+  Assertions read pixels rather than surface dimensions, following the lesson from
+  `tests/test_gridworld_render.py`, where 63 tests once asserted only that a surface had the size
+  the renderer said it would - a tautology that let six visual regressions ship green.
+- 2026-08-20 - five mutants against the new tests. Three died at once: playback exploring instead
+  of acting greedily, `--compare` pointed at the wrong level, and the arrow overlay failing to
+  reach the screen. **Two survived and were real holes.** Forcing `show_arrows` to False whenever
+  the flag was supplied passed, because the test only ever asserted the False case; it is now
+  parametrised over both directions. And indexing the Q-table with `table[state]` instead of
+  `table.get(state)` passed, because the test parked the agent on a cell the table already
+  contained - it now asserts the state is genuinely absent before looking for growth. That second
+  one matters beyond the test: the tables are `defaultdict`s, so indexing them during playback
+  would add a zero row per unseen state per step, and the table being demonstrated on camera would
+  quietly stop being the table that was trained. Both mutants die now.
+- 2026-08-20 - `--record` descoped, as the ticket allowed: screen capture software is a valid
+  substitute and cheaper than maintaining a frame dumper. `README.md`'s "not yet implemented"
+  annotation is gone and two more example commands were added. Closed.

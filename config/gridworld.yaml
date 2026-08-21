@@ -94,3 +94,7 @@ rendering:
   show_q_values: false
   animation_seconds: 0.12   # slide duration between cells; clamped below the step interval
   steps_per_second: 6.0     # simulation speed during visual rollout, adjusted live with +/-
+
+  # Playback only (`eval/play_gridworld.py`); the renderer itself never reads these.
+  playback_restart_seconds: 1.5   # pause on the finished episode before replaying it
+  compare_cell_size: 40           # smaller cells so two panels fit side by side in one window
