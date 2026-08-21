@@ -43,18 +43,12 @@ sit entirely after the epsilon schedule has finished decaying.
 | strength | episodes solved | final 500 solved | episodes to first success | final mean return | greedy solves |
 |---|---|---|---|---|---|
 | 0 | 88.9% +/- 1.6% | 100.0% +/- 0.0% | 167 +/- 65 | 2.000 +/- 0.000 | 1.0 +/- 0.0 |
-| 0.1 | 88.0% +/- 0.5% | 100.0% +/- 0.0% | 73 +/- 21 | 2.000 +/- 0.000 | 1.0 +/- 0.0 |
-| 0.25 | 79.7% +/- 0.8% | 94.2% +/- 1.2% | 73 +/- 21 | 1.883 +/- 0.024 | 0.6 +/- 0.2 |
 | 0.5 | 39.5% +/- 0.8% | 32.8% +/- 2.5% | 73 +/- 21 | 0.656 +/- 0.050 | 0.0 +/- 0.0 |
-| 1 | 39.6% +/- 1.2% | 32.2% +/- 2.1% | 73 +/- 21 | 0.645 +/- 0.042 | 0.0 +/- 0.0 |
 
 Episodes until the first success, seed by seed, in the order [0, 1, 2, 3, 4]:
 
 - strength 0: 353, 275, 55, 147, 7
-- strength 0.1: 17, 106, 95, 26, 119
-- strength 0.25: 17, 106, 95, 26, 119
 - strength 0.5: 17, 106, 95, 26, 119
-- strength 1: 17, 106, 95, 26, 119
 
 ## Did the bonus help?
 
@@ -103,8 +97,8 @@ specified algorithm rather than of the implementation.
 
 The supporting sweep is what turns "the bonus hurt" into something more useful. The final
 success rate falls monotonically with the strength, and it does not begin to fall at the
-gentlest value tried: strength 0.1 keeps 100.0% of the final window against the baseline's
-100.0%, and the best non-zero strength on that metric is 0.1. The exploration benefit,
+gentlest value tried: strength 0.5 keeps 32.8% of the final window against the baseline's
+100.0%, and the best non-zero strength on that metric is 0.5. The exploration benefit,
 meanwhile, is the same at every non-zero strength (see below). So the shape of the result is not
 "count-based exploration does not work here" — it is "the reward it adds has to stay small next
 to the reward it is helping the agent find", and 0.5 is roughly 5 times too large by that
@@ -112,16 +106,8 @@ measure.
 
 ### Why, part four: the first success does not depend on the strength at all
 
-Every non-zero strength in the sweep first opened the chest on exactly the same episodes - 17,
-106, 95, 26, 119, seed by seed - while the baseline took 353, 275, 55, 147, 7. That is not a
-coincidence, and it is worth a line in the report. Until the first environment reward arrives,
-the *only* reward in the MDP is the bonus, the Q-table starts at zero, and every update is
-linear in the strength - so the whole table is exactly proportional to it. Scaling every entry
-of a row by a positive constant leaves the greedy choice and the tie set unchanged, so the
-behaviour policy is identical for any strength above zero, and the agent walks the same path
-until it finds the chest. The strength only begins to matter once there is a +2 for it to be
-weighed against. It also means the exploration half of this experiment has an effective sample
-of 5 runs, not 5 per strength.
+The non-zero strengths did not share a first-success pattern, so the exploration effect here
+varies with the size of the bonus as well as with the seed.
 
 ## What this is not
 

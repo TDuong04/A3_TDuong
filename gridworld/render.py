@@ -67,6 +67,8 @@ from .levels import N_LEVELS
 Coord = tuple[int, int]
 State = tuple[int, int, bool, int]
 QTable = Mapping[State, Any]
+#: Tables for one algorithm across levels: indexed by level, or a plain sequence in level order.
+QTableSource = Sequence[QTable | None] | Mapping[int, QTable]
 Policy = Callable[[GridWorld], int]
 
 # --- palette (simple shapes, high contrast so the video reads at small sizes) --------------------
@@ -102,6 +104,17 @@ HEATMAP_STOPS: tuple[tuple[int, int, int], ...] = (
 )
 HEATMAP_ALPHA = 140
 
+#: How an algorithm key is spelled in the HUD. A marker reads "SARSA", not "sarsa".
+ALGO_LABELS: dict[str, str] = {"q": "Q-learning", "sarsa": "SARSA"}
+
+
+def algo_label(name: str | None) -> str:
+    """Human-readable algorithm name for the HUD; unknown keys are shown as given."""
+    if not name:
+        return ""
+    return ALGO_LABELS.get(str(name), str(name))
+
+
 CONTROLS: tuple[tuple[str, str], ...] = (
     ("SPACE", "pause / resume"),
     ("N", "single step"),
@@ -110,6 +123,7 @@ CONTROLS: tuple[tuple[str, str], ...] = (
     ("0 - 6", "switch level"),
     ("P", "policy arrows"),
     ("Q / H", "Q-value heatmap"),
+    ("TAB", "swap overlay"),
     ("WASD / arrows", "human play"),
     ("ESC", "quit"),
 )
@@ -218,7 +232,8 @@ class GridRenderer:
 
     @property
     def hud_height(self) -> int:
-        return max(30, int(self.config.cell_size * 0.62))
+        """Tall enough for two stacked text rows — see `_draw_hud`."""
+        return max(46, int(self.config.cell_size * 0.92))
 
     @property
     def legend_width(self) -> int:
@@ -556,13 +571,40 @@ class GridRenderer:
     def _draw_hud(
         self, surface: pygame.Surface, env: GridWorld, status: Mapping[str, Any]
     ) -> None:
-        """Level, steps, return, key and remaining items — the facts a marker needs on screen."""
+        """The facts a marker needs on screen without a debugger.
+
+        Two rows, because the algorithm quantities and the episode state are different questions.
+        The top row is what the learner is doing — which algorithm's table is on screen, which
+        episode, at what epsilon, and what the previous episode paid. The lower strip is the live
+        episode: steps, running return, key, items.
+
+        `episode`, `epsilon`, `last_return` and `algo` all come from `status`, never from `env`:
+        the environment has no idea an algorithm exists, and giving it one to satisfy a HUD would
+        put learning state inside the simulation.
+        """
         bar = pygame.Rect(0, 0, surface.get_width(), self.hud_height)
         pygame.draw.rect(surface, COLOR_PANEL, bar)
         remaining = len(env.remaining_collectibles)
         total = len(env.collectible_cells)
-        parts = [
-            f"Level {env.level_index}",
+
+        top: list[str] = [f"Level {env.level_index}"]
+        label = algo_label(status.get("algo"))
+        if label:
+            top.append(label)
+        episode = status.get("episode")
+        if episode is not None:
+            top.append(f"episode {int(episode)}")
+        epsilon = status.get("epsilon")
+        if epsilon is not None:
+            top.append(f"eps {float(epsilon):.3f}")
+        last_return = status.get("last_return")
+        # `is not None` and not truthiness: a genuine 0.0 return is the most informative value
+        # level 1 produces, and hiding it would hide every death.
+        top.append(
+            "last R " + ("--" if last_return is None else f"{float(last_return):+.1f}")
+        )
+
+        bottom = [
             f"steps {env.steps}",
             f"return {env.episode_return:+.1f}",
             f"key {'YES' if env.has_key else 'no'}",
@@ -570,9 +612,12 @@ class GridRenderer:
         ]
         speed = status.get("steps_per_second")
         if speed is not None:
-            parts.append(f"{float(speed):.1f} st/s")
-        text = self.font_hud.render("   ".join(parts), True, COLOR_TEXT)
-        surface.blit(text, text.get_rect(midleft=(10, bar.centery)))
+            bottom.append(f"{float(speed):.1f} st/s")
+
+        top_text = self.font_hud.render("   ".join(top), True, COLOR_TEXT)
+        bottom_text = self.font_small.render("   ".join(bottom), True, COLOR_TEXT_DIM)
+        surface.blit(top_text, top_text.get_rect(bottomleft=(10, bar.centery + 1)))
+        surface.blit(bottom_text, bottom_text.get_rect(topleft=(10, bar.centery + 3)))
 
         if env.died:
             state_text, color = "DEAD", (226, 76, 96)
@@ -625,6 +670,20 @@ class GridRenderer:
             label = self.font_small.render(f"{name}: {'on' if on else 'off'}", True, color)
             surface.blit(label, (x, y))
             y += label.get_height() + 4
+
+        # Which table the arrows and the heatmap are reading. Without this the side-by-side
+        # comparison is a claim about two screenshots rather than something visible in one.
+        overlay_algos = status.get("overlay_algos")
+        if overlay_algos:
+            active = status.get("algo")
+            y += 4
+            for name in overlay_algos:
+                on = name == active
+                color = COLOR_ACCENT if on else COLOR_TEXT_DIM
+                marker = ">" if on else " "
+                label = self.font_small.render(f"{marker} {algo_label(name)}", True, color)
+                surface.blit(label, (x, y))
+                y += label.get_height() + 4
 
         message = status.get("message")
         if message:
@@ -690,20 +749,44 @@ class PlaybackApp:
         seed: int | None = None,
         policy: Policy | None = None,
         q_tables: Sequence[QTable | None] | Mapping[int, QTable] | None = None,
+        overlays: Mapping[str, QTableSource] | None = None,
+        algo: str | None = None,
+        epsilon: float | None = None,
         renderer: GridRenderer | None = None,
         headless: bool = False,
         cell_size: int | None = None,
         fps: int | None = None,
     ) -> None:
+        """`overlays` maps an algorithm name to its tables, e.g. `{"q": ..., "sarsa": ...}`.
+
+        Supplying more than one is what makes TAB useful: the same level, the same window, one
+        keypress between Q-learning's arrows and SARSA's. `q_tables` remains the single-source
+        form and is folded into `overlays` under `algo` so existing callers keep working.
+
+        `epsilon` is the exploration rate the displayed policy is acting under — 0.0 for a greedy
+        rollout. It is shown, not used: the HUD has to state which policy is on screen, and
+        "greedy" is a claim worth putting a number behind.
+        """
         self.seed = seed
         self.policy = policy
-        self.q_tables = q_tables
+        self.epsilon = epsilon
+        self.overlays: dict[str, QTableSource] = dict(overlays or {})
+        if q_tables is not None and not self.overlays:
+            self.overlays = {algo or "": q_tables}
+        self.overlay_algos: tuple[str, ...] = tuple(self.overlays)
+        self._overlay_index = (
+            self.overlay_algos.index(algo)
+            if algo is not None and algo in self.overlay_algos
+            else 0
+        )
         self.renderer = renderer or GridRenderer(cell_size, fps, headless=headless)
         self.env = GridWorld(level_index=level, seed=seed)
         self.steps_per_second = self.renderer.config.steps_per_second
         self.paused = policy is None  # human play has nothing to auto-advance
         self.running = True
         self.message = ""
+        self.episode = 0
+        self.last_return: float | None = None
         self._accumulator = 0.0
         self.renderer.sync(self.env, animate=False)
         self._apply_speed()
@@ -715,14 +798,36 @@ class PlaybackApp:
         return "human" if self.policy is None else "policy"
 
     @property
+    def algo(self) -> str | None:
+        """Which algorithm's table is currently driving the overlays."""
+        if not self.overlay_algos:
+            return None
+        return self.overlay_algos[self._overlay_index]
+
+    @property
+    def q_tables(self) -> QTableSource | None:
+        """The active algorithm's tables, across levels."""
+        algo = self.algo
+        return None if algo is None else self.overlays[algo]
+
+    @property
     def q_table(self) -> QTable | None:
         """The Q-table for the level on screen, if one was supplied for it."""
-        if self.q_tables is None:
+        tables = self.q_tables
+        if tables is None:
             return None
-        if isinstance(self.q_tables, Mapping):
-            return self.q_tables.get(self.env.level_index)
+        if isinstance(tables, Mapping):
+            return tables.get(self.env.level_index)
         index = self.env.level_index
-        return self.q_tables[index] if index < len(self.q_tables) else None
+        return tables[index] if index < len(tables) else None
+
+    def cycle_overlay(self) -> str | None:
+        """Advance to the next algorithm's overlay. The C3 comparison, in one keypress."""
+        if len(self.overlay_algos) < 2:
+            return self.algo
+        self._overlay_index = (self._overlay_index + 1) % len(self.overlay_algos)
+        self.message = f"overlay: {algo_label(self.algo)}"
+        return self.algo
 
     def status(self) -> dict[str, Any]:
         return {
@@ -730,6 +835,11 @@ class PlaybackApp:
             "mode": self.mode,
             "steps_per_second": self.steps_per_second,
             "message": self.message,
+            "algo": self.algo,
+            "overlay_algos": self.overlay_algos,
+            "episode": self.episode,
+            "epsilon": self.epsilon,
+            "last_return": self.last_return,
         }
 
     def _apply_speed(self) -> None:
@@ -749,6 +859,9 @@ class PlaybackApp:
         self.env.step(action)
         self.renderer.sync(self.env)
         if self.env.done:
+            # Capture the return before any reset clears it — the HUD's "last R" is the whole
+            # record of how the previous attempt went once the grid has been rebuilt.
+            self.last_return = self.env.episode_return
             self.message = "episode over — press R to reset"
 
     def policy_step(self) -> None:
@@ -758,8 +871,12 @@ class PlaybackApp:
         self.step(self.policy(self.env))
 
     def reset(self) -> None:
+        """Start the next episode on the same level. Counts only episodes actually begun."""
+        if not self.env.done:
+            self.last_return = self.env.episode_return  # abandoned part-way; still the last one
         self.env.reset(seed=self.seed)
         self.renderer.sync(self.env, animate=False)
+        self.episode += 1
         self.message = ""
         self._accumulator = 0.0
 
@@ -768,6 +885,10 @@ class PlaybackApp:
             return
         self.env = GridWorld(level_index=level, seed=self.seed)
         self.renderer.sync(self.env, animate=False)
+        # A different level is a different task, so the episode count restarts rather than
+        # carrying a number that would mean two things at once.
+        self.episode = 0
+        self.last_return = None
         self.message = f"level {level}"
         self._accumulator = 0.0
 
@@ -808,6 +929,8 @@ class PlaybackApp:
             self.renderer.toggle_policy_arrows()
         elif key in (pygame.K_q, pygame.K_h):
             self.renderer.toggle_q_values()
+        elif key == pygame.K_TAB:
+            self.cycle_overlay()
         elif key in HUMAN_KEYS:
             # A direction key is always a human move; in policy mode it also pauses playback so the
             # human and the policy cannot fight over the same env.

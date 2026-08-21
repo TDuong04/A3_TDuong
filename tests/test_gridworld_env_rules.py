@@ -296,6 +296,42 @@ def test_illegal_action_is_rejected(make_env):
         env.step(4)
 
 
+# --- the action set ---------------------------------------------------------------------------
+
+
+def test_available_actions_is_the_full_action_set_in_every_state(make_env):
+    """A tabular Q-table needs column `a` to mean the same action in every row."""
+    env = make_env("S#\n#A\n")  # boxed in: both moves out of the start are blocked
+    assert env.available_actions() == tuple(Action)
+    env.step(Action.DOWN)
+    assert env.available_actions() == tuple(Action)
+
+
+def test_is_legal_move_reports_rocks_and_grid_edges(make_env):
+    env = make_env("S#.\n...\n...\n")
+    assert not env.is_legal_move(Action.UP)  # top edge
+    assert not env.is_legal_move(Action.LEFT)  # left edge
+    assert not env.is_legal_move(Action.RIGHT)  # rock
+    assert env.is_legal_move(Action.DOWN)
+
+
+def test_moving_actions_is_the_subset_that_displaces_the_agent(make_env):
+    env = make_env("S#.\n.A.\n...\n")
+    assert env.moving_actions() == (Action.DOWN,)
+    env.step(Action.DOWN)
+    assert set(env.moving_actions()) == {Action.UP, Action.DOWN, Action.RIGHT}
+
+
+def test_a_blocked_move_is_still_accepted_by_step(make_env):
+    """`available_actions` promises it, so `step` must honour it: no-op, not an error."""
+    env = make_env("S#\n.A\n")
+    before = env.agent_pos
+    _, reward, done, _ = env.step(Action.RIGHT)
+    assert env.agent_pos == before
+    assert reward == 0.0
+    assert not done
+
+
 # --- the state key ----------------------------------------------------------------------------
 
 

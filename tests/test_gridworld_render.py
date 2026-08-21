@@ -50,6 +50,7 @@ from gridworld.render import (  # noqa: E402
     GridRenderer,
     PlaybackApp,
     RenderConfig,
+    algo_label,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -735,3 +736,102 @@ def test_env_does_not_import_the_renderer():
     assert result.returncode == 0, (
         f"importing gridworld.env pulled in: {'; '.join(leaked) or result.stdout}\n{result.stderr}"
     )
+
+
+# --- the visibility overlays (rubric: algorithm internals must be on screen) ---------------------
+
+
+@pytest.fixture
+def compare_app(request) -> PlaybackApp:
+    """An app holding one table per algorithm, which is what makes TAB meaningful."""
+    env = GridWorld(level_index=0, seed=0)
+    made = PlaybackApp(
+        level=0,
+        seed=0,
+        headless=True,
+        cell_size=24,
+        overlays={"q": {0: populated_q_table(env)}, "sarsa": {0: populated_q_table(env)}},
+        algo="q",
+        epsilon=0.0,
+    )
+    yield made
+    made.renderer.close()
+
+
+def test_tab_cycles_the_policy_overlay_between_algorithms(compare_app):
+    assert compare_app.algo == "q"
+    compare_app.handle_event(key(pygame.K_TAB))
+    assert compare_app.algo == "sarsa"
+    compare_app.handle_event(key(pygame.K_TAB))
+    assert compare_app.algo == "q", "cycling must wrap, not run off the end"
+
+
+def test_tab_selects_the_matching_algorithms_table(compare_app):
+    """Swapping the label without swapping the table would make the comparison a lie."""
+    q_table = compare_app.q_table
+    compare_app.handle_event(key(pygame.K_TAB))
+    assert compare_app.q_table is not q_table
+    assert compare_app.q_table is compare_app.overlays["sarsa"][0]
+
+
+def test_tab_is_inert_with_a_single_overlay(app):
+    assert app.overlay_algos in ((), ("",))
+    app.handle_event(key(pygame.K_TAB))  # must not raise or scramble state
+    assert app.q_table is None
+
+
+def test_status_carries_the_quantities_the_hud_must_show(compare_app):
+    status = compare_app.status()
+    for field in ("algo", "episode", "epsilon", "last_return", "overlay_algos"):
+        assert field in status, f"HUD input {field!r} missing from status()"
+    assert status["algo"] == "q"
+    assert status["epsilon"] == 0.0
+    assert status["last_return"] is None, "no episode has finished yet"
+
+
+def test_episode_counter_and_last_return_track_finished_episodes(app):
+    """The HUD's episode/last-return pair is the only record of the previous attempt."""
+    assert app.episode == 0 and app.last_return is None
+
+    app.policy = lambda env: int(Action.DOWN)
+    while not app.env.done:
+        app.policy_step()
+    finished_return = app.env.episode_return
+
+    app.handle_event(key(pygame.K_r))
+    assert app.episode == 1
+    assert app.last_return == pytest.approx(finished_return)
+    assert app.env.episode_return == 0.0, "the live return restarts; last_return does not"
+
+
+def test_switching_level_restarts_the_episode_count(app):
+    app.handle_event(key(pygame.K_r))
+    assert app.episode == 1
+    app.handle_event(key(pygame.K_2))
+    assert app.env.level_index == 2
+    assert app.episode == 0, "an episode count spanning two levels would mean two things"
+    assert app.last_return is None
+
+
+def test_algo_label_spells_the_algorithms_out_for_the_hud():
+    assert algo_label("q") == "Q-learning"
+    assert algo_label("sarsa") == "SARSA"
+    assert algo_label(None) == ""
+    assert algo_label("ppo") == "ppo", "unknown keys pass through rather than vanishing"
+
+
+def test_hud_renders_the_algorithm_quantities_without_a_debugger(compare_app):
+    """Draws a real frame: the HUD must survive every field being populated."""
+    surface = compare_app.draw()
+    assert surface.get_height() > compare_app.env.n_rows * 24, "HUD strip must have height"
+
+    compare_app.epsilon = 0.137
+    compare_app.episode = 42
+    compare_app.last_return = -1.0
+    assert compare_app.draw() is surface
+
+
+def test_hud_draws_with_no_algorithm_information_at_all(app):
+    """Human play supplies no algo, epsilon or last return; the HUD must not require them."""
+    assert app.status()["algo"] is None
+    app.draw()

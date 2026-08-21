@@ -27,3 +27,5 @@ CLAUDE.md
 # NOTE: models/ logs/ and results/ are deliberately NOT ignored.
 # The brief requires saved models and TensorBoard logs inside the submitted zip.
 # Do not add them here.
+
+.history/

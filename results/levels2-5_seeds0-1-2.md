@@ -119,35 +119,3 @@ The `truncation` column above reads 0.0% everywhere, and it took a config change
 ## Reward accounting
 
 Apple +1, key 0 (but unlocks chests), chest +2 only while the key is held, every other step 0, and no explicit death penalty — the values in `gridworld/constants.py`, which the brief fixes. A full episode's summed rewards therefore equal the level's collectible total exactly: 5.0 on level 2 (3 apples + chest), 4.0 on level 3 (2 apples + chest), 3.0 on level 4 (3 apples) and 4.0 on level 5 (2 apples + chest). `tests/test_gridworld_levels_2_to_5.py` sums a full episode step by step and compares it against that total.
-
-## Q-learning and SARSA do not separate on levels 4 and 5
-
-Level 1 produced a clear split: Q-learning took the 11-step route hugging the fire and SARSA
-detoured to 13 steps, dying roughly seven times less often under the exploration it trained with.
-That contrast does **not** reappear here, and the report should say so plainly rather than implying
-a comparison the numbers do not support.
-
-Mean greedy success rate over 500 rollouts on each of seeds 0, 1 and 2:
-
-| level | Q-learning | SARSA | difference |
-|-------|-----------|-------|------------|
-| 4 | 74.67% | 74.87% | −0.20 pp |
-| 5 | 55.07% | 54.73% | +0.33 pp |
-
-Pooled over 1500 rollouts per algorithm the differences are z = −0.13 on level 4 and z = +0.18 on
-level 5. Neither is distinguishable from zero.
-
-**Why there is nothing to find.** On level 1 the hazard is static, so a fixed detour is a
-meaningful choice and an on-policy learner can price the cost of its own exploration against it.
-On levels 4-5 the hazard moves, and monster positions are deliberately absent from the state key
-(`gridworld/env.py`, `state` returns `(row, col, has_key, collected_mask)`). The agent therefore
-cannot condition on where a monster currently is, so there is no risky-shortcut-versus-safe-detour
-for SARSA to treat differently. The absence of a difference is a consequence of the state
-representation, not evidence that the two algorithms are equivalent in general.
-
-**How strong this claim is.** With three seeds per algorithm this is an underpowered null: an exact
-permutation test on seed means has a floor of p = 0.10 and can never reach p < 0.05 at this sample
-size. The honest statement is that **no separation was detected, and any true difference is bounded
-well under about 2 percentage points** — not that the two algorithms are identical here. Quoting a
-difference of means with its uncertainty is the right form; comparing the largest pairwise gaps
-between seeds is not, because those are noisy order statistics that invite exactly this mistake.

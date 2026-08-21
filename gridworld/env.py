@@ -208,6 +208,30 @@ class GridWorld:
         """Only rocks and the grid edge block. Items and fire are all enterable."""
         return not self.in_bounds(row, col) or self.grid[row][col] == Tile.ROCK
 
+    def is_legal_move(self, action: int | Action) -> bool:
+        """Whether `action` would actually displace the agent from where it stands.
+
+        "Legal" here means "not walled off": a rock or the grid edge ahead makes the move a no-op.
+        It is a query for the renderer and for debugging, never a filter on the action set — see
+        `available_actions`.
+        """
+        d_row, d_col = ACTION_DELTAS[Action(int(action))]
+        return not self.is_blocked(self.agent_pos[0] + d_row, self.agent_pos[1] + d_col)
+
+    def available_actions(self) -> tuple[Action, ...]:
+        """The action set an agent may choose from — always all four moves, in every state.
+
+        Deliberately *not* filtered by `is_legal_move`. The brief makes bumping a rock a legal
+        action with a no-op outcome, and a tabular agent needs column `a` of its Q-table to mean
+        the same action in every row; pruning blocked directions would both relabel the table
+        per-state and hide the fact that the agent has to learn not to walk into walls.
+        """
+        return tuple(Action)
+
+    def moving_actions(self) -> tuple[Action, ...]:
+        """The subset of `available_actions` that would change the agent's position."""
+        return tuple(action for action in Action if self.is_legal_move(action))
+
     # --- the step function -------------------------------------------------------------------
 
     def step(self, action: int | Action) -> tuple[State, float, bool, dict[str, Any]]:
