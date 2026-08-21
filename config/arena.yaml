@@ -45,6 +45,22 @@ phases:
     enemy_speed: 150
     spawn_interval: 1.6
 
+# Divisors the observation vector saturates against. They are caps, not live maxima: rescaling a
+# feature by whatever happened to be on screen would mean the same number described different
+# worlds in different episodes.
+observation:
+  enemy_count_cap: 20     # `enemies alive` reads 1.0 at or above this many
+  spawner_count_cap: 6    # comfortably above the largest `spawners` entry in `phases`
+
+# Episode-level rules the env enforces around the entities: how a phase is laid out and how much
+# of the arena may be alive at once.
+episode:
+  max_enemies: 40           # live-enemy cap; bounds step() cost across a 400k-timestep run
+  arena_margin: 60          # pixels; spawners stay off the walls so the player can circle them
+  min_player_clearance: 220 # pixels; a new phase never drops a spawner onto the player
+  min_spawner_separation: 140
+  placement_attempts: 40    # rejection samples before the best candidate so far is accepted
+
 player:
   max_health: 5
   speed: 220              # max speed, pixels/second - the SAME cap for both control styles
