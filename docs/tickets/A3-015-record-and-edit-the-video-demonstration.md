@@ -8,11 +8,11 @@ rubric: V
 points_at_risk: 5.0
 area: video
 github: https://github.com/TDuong04/A3_TDuong/issues/15
-owner: unassigned
-blocks: []
-blocked_by: [A3-012, A3-002]
+owner: member-3
+blocks: [A3-025]
+blocked_by: [A3-012, A3-026]
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-29
 ---
 
 # A3-015 — Record and edit the video demonstration
@@ -42,3 +42,4 @@ The models shown must be the ones committed in `models/`.
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/15
+- 2026-08-29 — blocked_by A3-002 dropped (done) and A3-026 added — the shot list is planned before the recording session. Assigned to member-3

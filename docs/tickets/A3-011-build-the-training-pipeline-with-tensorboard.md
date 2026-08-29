@@ -8,11 +8,11 @@ rubric: J
 points_at_risk: 3.0
 area: training
 github: https://github.com/TDuong04/A3_TDuong/issues/11
-owner: unassigned
+owner: member-1
 blocks: [A3-012, A3-013]
-blocked_by: [A3-010]
+blocked_by: [A3-021]
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-29
 ---
 
 # A3-011 — Build the training pipeline with TensorBoard behavioural logging
@@ -40,3 +40,4 @@ Files: `train/train_arena.py`, `train/callbacks.py`.
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/11
+- 2026-08-29 — blocked_by moved from A3-010 (done) to A3-021, the pre-flight env validation; assigned to member-1

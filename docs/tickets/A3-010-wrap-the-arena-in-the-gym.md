@@ -2,17 +2,17 @@
 id: A3-010
 title: Wrap the arena in the Gym-style API with the observation vector
 type: feature
-status: open
+status: done
 priority: P0
 rubric: H
 points_at_risk: 2.5
 area: arena
 github: https://github.com/TDuong04/A3_TDuong/issues/10
-owner: unassigned
+owner: member-1
 blocks: [A3-011]
 blocked_by: [A3-008]
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-29
 ---
 
 # A3-010 — Wrap the arena in the Gym-style API with the observation vector
@@ -43,3 +43,4 @@ The observation layout is fully specified in the `arena/observation.py` docstrin
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/10
+- 2026-08-29 — closed — ArenaEnv is a Gymnasium env with a 21-D Box(-1,1) float32 observation, Discrete(5)/Discrete(6) per style, and LegacyGymAPI ships the 4-tuple adapter; verified by a random rollout in both styles

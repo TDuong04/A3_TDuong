@@ -2,17 +2,17 @@
 id: A3-020
 title: Implement the gridworld playback script
 type: feature
-status: open
+status: done
 priority: P0
 rubric: V
 points_at_risk: 5.0
 area: eval
 github: https://github.com/TDuong04/A3_TDuong/issues/20
-owner: unassigned
+owner: member-3
 blocks: [A3-015]
 blocked_by: []
 created: 2026-08-20
-updated: 2026-08-20
+updated: 2026-08-29
 ---
 
 # A3-020 — Implement the gridworld playback script
@@ -67,3 +67,4 @@ substitute and cheaper than maintaining a frame dumper.
   Part I artifact actually serves, rather than by a test failing: nothing fails, because nothing
   tests a script that raises `NotImplementedError` by design.
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/20
+- 2026-08-29 — closed — eval/play_gridworld.py is implemented with --compare and the TAB overlay swap, covered by tests/test_gridworld_playback_cli.py

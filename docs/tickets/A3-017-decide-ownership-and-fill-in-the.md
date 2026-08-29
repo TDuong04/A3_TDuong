@@ -8,11 +8,11 @@ rubric: R
 points_at_risk: 2.5
 area: infra
 github: https://github.com/TDuong04/A3_TDuong/issues/17
-owner: unassigned
+owner: member-3
 blocks: []
 blocked_by: []
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-29
 ---
 
 # A3-017 — Decide ownership and fill in the team table
@@ -37,3 +37,4 @@ Part II is roughly half the marks and too large for one person — training, eva
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/17
+- 2026-08-29 — assigned to member-3

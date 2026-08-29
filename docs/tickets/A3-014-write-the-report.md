@@ -8,11 +8,11 @@ rubric: R
 points_at_risk: 2.5
 area: report
 github: https://github.com/TDuong04/A3_TDuong/issues/14
-owner: unassigned
-blocks: []
-blocked_by: [A3-007, A3-012]
+owner: member-3
+blocks: [A3-025]
+blocked_by: [A3-012, A3-024]
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-29
 ---
 
 # A3-014 — Write the report
@@ -42,3 +42,4 @@ Figures come from `results/`. Every claim needs a seed or a run behind it.
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/14
+- 2026-08-29 — blocked_by A3-007 dropped (done) and A3-024 added — the Part I sections are drafted there first. Assigned to member-3

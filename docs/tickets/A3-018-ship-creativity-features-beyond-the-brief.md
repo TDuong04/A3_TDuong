@@ -8,11 +8,11 @@ rubric: Creativity
 points_at_risk: 5.0
 area: arena
 github: https://github.com/TDuong04/A3_TDuong/issues/18
-owner: unassigned
+owner: member-2
 blocks: []
-blocked_by: [A3-009]
+blocked_by: []
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-29
 ---
 
 # A3-018 — Ship creativity features beyond the brief
@@ -29,7 +29,7 @@ rather than half-building six.
 
 ## Acceptance criteria
 
-- [ ] Observation overlay shipped and toggleable (shared with A3-009)
+- [x] Observation overlay shipped and toggleable (shared with A3-009, done)
 - [ ] Human-playable mode on the same env used for training
 - [ ] Visual feedback: muzzle flash, hit flicker, explosion particles, screen shake
 - [ ] At least one item the report can point at and call original, with a sentence justifying it
@@ -42,3 +42,4 @@ Purely visual effects must never touch simulation state, or evaluation stops mat
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/18
+- 2026-08-29 — unblocked — A3-009 is done and the observation overlay already ships. Assigned to member-2

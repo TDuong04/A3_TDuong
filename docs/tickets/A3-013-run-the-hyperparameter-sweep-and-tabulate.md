@@ -8,11 +8,11 @@ rubric: J3
 points_at_risk: 3.0
 area: training
 github: https://github.com/TDuong04/A3_TDuong/issues/13
-owner: unassigned
+owner: member-1
 blocks: []
 blocked_by: [A3-011]
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-29
 ---
 
 # A3-013 — Run the hyperparameter sweep and tabulate the results
@@ -38,3 +38,4 @@ Delegate to the `sweep-runner` agent; it keeps the SB3 output out of the main co
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/13
+- 2026-08-29 — assigned to member-1

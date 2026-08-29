@@ -2,17 +2,17 @@
 id: A3-009
 title: Build the arena renderer, HUD and observation overlay
 type: feature
-status: open
+status: done
 priority: P0
 rubric: G
 points_at_risk: 4.5
 area: arena
 github: https://github.com/TDuong04/A3_TDuong/issues/9
-owner: unassigned
+owner: member-2
 blocks: [A3-018]
 blocked_by: [A3-008]
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-29
 ---
 
 # A3-009 — Build the arena renderer, HUD and observation overlay
@@ -41,3 +41,4 @@ Files: `arena/render.py`. Called only from `ArenaEnv.render()`.
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/9
+- 2026-08-29 — closed — renderer, HUD and observation overlay are implemented in arena/render.py (_draw_hud, _draw_observation_overlay) and covered by tests/test_arena_render.py; the ticket had gone stale on the board
