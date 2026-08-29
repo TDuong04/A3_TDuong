@@ -7,6 +7,7 @@ priority: P1
 rubric: R
 points_at_risk: 2.5
 area: infra
+part: none
 github: https://github.com/TDuong04/A3_TDuong/issues/17
 owner: member-3
 blocks: []

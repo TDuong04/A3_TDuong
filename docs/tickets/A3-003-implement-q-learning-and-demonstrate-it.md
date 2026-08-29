@@ -7,6 +7,7 @@ priority: P0
 rubric: B
 points_at_risk: 2.5
 area: gridworld
+part: 1
 github: https://github.com/TDuong04/A3_TDuong/issues/3
 owner: unassigned
 blocks: [A3-004, A3-005]

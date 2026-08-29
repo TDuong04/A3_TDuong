@@ -53,7 +53,19 @@ LABELS = [
     ("report", "fef2c0", "Report"),
     ("video", "fad8c7", "Video demonstration"),
     ("infra", "e4e669", "Tooling and repo"),
+    ("part1", "006b75", "Part I — tabular Q-learning and SARSA in the gridworld"),
+    ("part2", "8250df", "Part II — deep RL in the real-time arena"),
 ]
+
+#: Which assignment part a ticket belongs to. `both` earns both labels, `none` earns neither —
+#: submission packaging and the team table serve the whole project, not one half of it.
+PART_LABELS = {"1": ["part1"], "2": ["part2"], "both": ["part1", "part2"], "none": []}
+PART_DISPLAY = {"1": "I", "2": "II", "both": "I+II", "none": "—"}
+
+
+def part_of(t: dict) -> str:
+    """Normalise the `part:` frontmatter field, which YAML may hand back as an int."""
+    return str(t.get("part", "none"))
 
 
 def run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
@@ -72,6 +84,10 @@ def load_tickets() -> list[dict]:
         meta = yaml.safe_load(match.group(1))
         meta["_path"] = path
         meta["_body"] = match.group(2).strip()
+        if str(meta.get("part", "none")) not in PART_LABELS:
+            raise ValueError(
+                f"{path.name}: part must be one of {sorted(PART_LABELS)}, got {meta.get('part')!r}"
+            )
         tickets.append(meta)
     return tickets
 
@@ -119,8 +135,8 @@ def write_index(tickets: list[dict]) -> None:
             lines += ["_none_", ""]
             continue
         lines += [
-            "| ID | Pri | Type | Title | Rubric | Pts | Area | Owner | Issue |",
-            "|----|-----|------|-------|--------|-----|------|-------|-------|",
+            "| ID | Pri | Type | Part | Title | Rubric | Pts | Area | Owner | Issue |",
+            "|----|-----|------|------|-------|--------|-----|------|-------|-------|",
         ]
         for t in rows:
             pts = t.get("points_at_risk", 0)
@@ -131,6 +147,7 @@ def write_index(tickets: list[dict]) -> None:
             title = t["title"] + (f" _(blocked by {blocked})_" if blocked and key == "open" else "")
             lines.append(
                 f"| [{t['id']}]({t['_path'].name}) | {t.get('priority', '')} | {t.get('type', '')} "
+                f"| {PART_DISPLAY.get(part_of(t), '—')} "
                 f"| {title} | {t.get('rubric', 'none')} | {pts_s} | {t.get('area', '')} "
                 f"| {t.get('owner', 'unassigned')} | {issue_s} |"
             )
@@ -166,7 +183,8 @@ def issue_body(t: dict) -> str:
     meta = [
         f"**Rubric row:** {t.get('rubric', 'none')} · "
         f"**Points at risk:** {t.get('points_at_risk', 0)} · "
-        f"**Area:** {t.get('area', '')}",
+        f"**Area:** {t.get('area', '')} · "
+        f"**Part:** {PART_DISPLAY.get(part_of(t), '—')}",
         f"**Ticket:** `docs/tickets/{t['_path'].name}`",
     ]
     if t.get("blocked_by"):
@@ -185,6 +203,7 @@ def create_issues(tickets: list[dict], dry_run: bool) -> dict[str, str]:
             continue
         title = f"{t['id']}: {t['title']}"
         labels = [t.get("priority", "P2"), t.get("type", "task"), t.get("area", "infra")]
+        labels += PART_LABELS.get(part_of(t), [])
         if dry_run:
             print(f"[dry-run] issue: {title}  labels={labels}")
             continue
@@ -219,6 +238,23 @@ def stamp_github_urls(tickets: list[dict], created: dict[str, str]) -> None:
         )
         text = text.rstrip("\n") + f"\n- mirrored to GitHub issue {url}\n"
         path.write_text(text, encoding="utf-8")
+
+
+def sync_part_labels(tickets: list[dict], dry_run: bool) -> None:
+    """Apply the part1/part2 labels to issues that already exist.
+
+    Issues are labelled at creation, so tickets mirrored before the part field existed carry none.
+    `gh issue edit --add-label` is idempotent, which keeps this safe to re-run.
+    """
+    for t in tickets:
+        labels = PART_LABELS.get(part_of(t), [])
+        if not t.get("github") or not labels:
+            continue
+        if dry_run:
+            print(f"[dry-run] label {t['id']} -> {labels}")
+            continue
+        run(["gh", "issue", "edit", t["github"],
+             *sum((["--add-label", lab] for lab in labels), [])], check=False)
 
 
 def cross_link(tickets: list[dict], dry_run: bool) -> None:
@@ -267,6 +303,7 @@ def main() -> int:
         if created:
             stamp_github_urls(tickets, created)
             tickets = load_tickets()  # reload so the board picks up the new github: fields
+        sync_part_labels(tickets, args.dry_run)
         cross_link(tickets, args.dry_run)
 
     write_index(tickets)

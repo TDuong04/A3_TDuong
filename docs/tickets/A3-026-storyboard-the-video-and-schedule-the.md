@@ -7,6 +7,7 @@ priority: P1
 rubric: V
 points_at_risk: 5.0
 area: video
+part: both
 github: https://github.com/TDuong04/A3_TDuong/issues/27
 owner: member-3
 blocks: [A3-015]

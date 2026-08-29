@@ -7,6 +7,7 @@ priority: P1
 rubric: none
 points_at_risk: 0
 area: arena
+part: 2
 github: https://github.com/TDuong04/A3_TDuong/issues/23
 owner: member-2
 blocks: [A3-012, A3-015]

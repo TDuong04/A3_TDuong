@@ -7,6 +7,7 @@ priority: P0
 rubric: none
 points_at_risk: 0
 area: infra
+part: none
 github: https://github.com/TDuong04/A3_TDuong/issues/26
 owner: member-3
 blocked_by: [A3-012, A3-014, A3-015]

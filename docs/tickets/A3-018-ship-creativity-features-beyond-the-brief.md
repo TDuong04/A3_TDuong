@@ -7,6 +7,7 @@ priority: P2
 rubric: Creativity
 points_at_risk: 5.0
 area: arena
+part: 2
 github: https://github.com/TDuong04/A3_TDuong/issues/18
 owner: member-2
 blocks: []

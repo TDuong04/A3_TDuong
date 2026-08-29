@@ -7,6 +7,7 @@ priority: P0
 rubric: I
 points_at_risk: 4.0
 area: eval
+part: 2
 github: https://github.com/TDuong04/A3_TDuong/issues/12
 owner: member-1
 blocks: [A3-014, A3-015]

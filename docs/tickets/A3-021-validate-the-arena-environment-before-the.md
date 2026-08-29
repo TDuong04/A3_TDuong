@@ -7,6 +7,7 @@ priority: P0
 rubric: H
 points_at_risk: 2.5
 area: training
+part: 2
 github: https://github.com/TDuong04/A3_TDuong/issues/22
 owner: member-1
 blocks: [A3-011]

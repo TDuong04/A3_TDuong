@@ -7,6 +7,7 @@ priority: P0 | P1 | P2 | P3
 rubric: none
 points_at_risk: 0
 area: gridworld | arena | training | eval | report | video | infra
+part: 1 | 2 | both | none
 owner: unassigned
 blocks: []
 blocked_by: []

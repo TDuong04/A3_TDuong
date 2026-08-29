@@ -7,6 +7,7 @@ priority: P2
 rubric: none
 points_at_risk: 0.0
 area: infra
+part: none
 github: https://github.com/TDuong04/A3_TDuong/issues/16
 owner: unassigned
 blocks: []
