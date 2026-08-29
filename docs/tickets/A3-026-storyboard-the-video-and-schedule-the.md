@@ -3,7 +3,7 @@ id: A3-026
 title: Storyboard the video and schedule the recording session
 type: task
 status: open
-priority: P1
+priority: P0
 rubric: V
 points_at_risk: 5.0
 area: video
@@ -49,3 +49,6 @@ wrong. Hands over to A3-015 for the recording and edit.
 
 - 2026-08-29 — created; the planning half of A3-015, which needs no Part II dependency
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/27
+- 2026-08-29 — priority P1 -> P0: it blocks A3-015, a P0 ticket worth 5 rubric points, and is the
+  only V-row work that can be done before Part II lands. Blocking a P0 makes this P0 under the
+  board's own rule.

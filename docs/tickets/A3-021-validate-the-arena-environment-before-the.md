@@ -41,6 +41,10 @@ Do this once, before A3-011 burns any GPU hours. It is also the evidence rubric 
       set, over 200 episodes
 - [ ] `render_mode=None` imports and runs with `SDL_VIDEODRIVER=dummy` and opens no window
 - [ ] Step throughput recorded in steps/second on one core, so A3-011 can size its budget
+- [ ] All of the above written to a durable file under `results/` (per-feature ranges, the named
+      dead/saturated features if any, the determinism pass, and the steps/second figure) — an
+      assertion that ran is only evidence if its output survives the run, and both A3-014 and the
+      new Part II report-figures ticket need to cite it
 
 ## Notes
 
@@ -52,3 +56,6 @@ tolerance to widen.
 
 - 2026-08-29 — created; the arena env is built but never stress-tested
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/22
+- 2026-08-29 — added acceptance criterion requiring the validation output be written to a durable
+  file under `results/`, not just asserted in a throwaway harness run — the report and A3-014
+  need to cite it and cannot cite something that no longer exists once the terminal is closed.
