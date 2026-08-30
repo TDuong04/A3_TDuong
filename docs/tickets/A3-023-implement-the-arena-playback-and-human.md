@@ -10,7 +10,7 @@ area: eval
 part: 2
 github: https://github.com/TDuong04/A3_TDuong/issues/24
 owner: member-2
-blocks: [A3-012, A3-022]
+blocks: [A3-012, A3-022, A3-030]
 blocked_by: []
 created: 2026-08-29
 updated: 2026-08-29
@@ -51,3 +51,5 @@ the table report row R6 needs, so print it in a paste-ready form. Split out of A
 
 - 2026-08-29 — created; split the eval script out of A3-012 to unblock parallel work
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/24
+- 2026-08-29 — blocks A3-030 added: the new arena debug-overlay ticket hosts its panel inside this
+  script, which is still a stub
