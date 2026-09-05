@@ -437,14 +437,18 @@ class ArenaEnv(gym.Env):
     def _info(self) -> dict[str, Any]:
         """The behavioural metrics the TensorBoard callback and the report read.
 
-        All four are cumulative over the episode, so the final `info` of an episode is a complete
-        summary of it — which is what `Monitor(info_keywords=...)` records.
+        The first four are cumulative over the episode, so the final `info` of an episode is a
+        complete summary of it — which is what `Monitor(info_keywords=...)` records.
         """
         return {
             "phase": self.phase,
             "spawners_destroyed": self.spawners_destroyed,
             "enemies_killed": self.enemies_killed,
             "damage_taken": self.damage_taken,
+            # Death, as opposed to the step cap. The two endings mean opposite things about a
+            # policy, and the reward curve cannot tell them apart; `behaviour/survival_rate` is
+            # this key averaged over a window.
+            "terminated": not self.player.alive,
             "health": self.player.health,
             "steps": self.steps,
             "episode_reward": self.episode_reward,
