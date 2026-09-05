@@ -1,30 +1,27 @@
-"""Visual playback of a trained deep RL agent — NOT YET IMPLEMENTED.
+"""Human playback on ArenaEnv; trained-model evaluation remains in A3-012.
 
-    python -m eval.play_arena --style rotation
-    python -m eval.play_arena --style direct --episodes 5
+    python -m eval.play_arena --human --style direct --seed 0
+    python -m eval.play_arena --human --style rotation --seed 0
 
-Rubric row I4 requires an evaluation script that can visually run each trained agent, so this must
-work for both styles from `models/`. Use `deterministic=True` at evaluation.
-
-This is what the video records for Part II. It must show enemies spawning and moving, projectiles
-and collisions, and at least one phase progression — so make sure the loaded agent can actually
-clear phase 1 before recording, and keep phase 1 tuned to be clearable in 20-30 seconds.
-
-Include the observation overlay toggle and a HUD (phase, health, action name, cumulative reward).
-Add `--human` to play the same env yourself, which is both a creativity feature and the fastest way
-to tell a broken environment from a badly trained agent.
-
-Print a summary over `--episodes` runs: mean and std return, mean phase reached, spawners destroyed,
-survival time. Those numbers are report row R6's control-set comparison — run both styles under the
-same seeds and tabulate.
+The same application is available through arena.render, including its scripted demo.
+No model is loaded and human play must be requested explicitly here.
 """
-
 from __future__ import annotations
 
+import sys
+from collections.abc import Sequence
 
-def main() -> None:
-    raise NotImplementedError("see module docstring for the contract")
+
+def main(argv: Sequence[str] | None = None) -> int:
+    from arena.play import main as play_main
+
+    args = list(sys.argv[1:] if argv is None else argv)
+    if '--human' not in args and not any(flag in args for flag in ('--help', '-h')):
+        print('Trained-model evaluation is not implemented (A3-012). Use --human for keyboard play.',
+              file=sys.stderr)
+        return 2
+    return play_main(args)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    raise SystemExit(main())

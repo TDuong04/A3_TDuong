@@ -12,7 +12,7 @@ owner: unassigned
 blocks: [A3-014, A3-015]
 blocked_by: [A3-011]
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-09-05
 ---
 
 # A3-012 — Train both control agents and write the evaluation scripts
@@ -32,7 +32,7 @@ harder control style is attempted.
 - [ ] `eval/play_arena.py --style {rotation,direct}` visually runs each with deterministic=True
 - [ ] Both agents clear phase 1 at least once during evaluation
 - [ ] Summary printed over 5 seeded episodes: return, phase reached, spawners destroyed, survival
-- [ ] `--human` mode plays the same env from the keyboard
+- [x] `--human` mode plays the same env from the keyboard
 
 ## Notes
 
@@ -42,3 +42,4 @@ If an agent cannot clear phase 1, tune phase 1 in config rather than adding time
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/12
+- 2026-09-05 — A3-018 implemented keyboard play through python -m eval.play_arena --human for both styles, using the unmodified ArenaEnv. Training, model loading, and evaluation summaries remain outstanding; this ticket stays open.
