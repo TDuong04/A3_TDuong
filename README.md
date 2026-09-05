@@ -54,6 +54,8 @@ python -m eval.play_gridworld --level 1 --compare      # the same contrast anima
 # Part II
 python -m train.train_arena --style direct
 python -m train.train_arena --style rotation
+python -m train.sweep_arena --dry-run                  # J3: the sweep's run plan, no training
+python -m train.sweep_arena                            # J3: explore, confirm on 3 seeds, retrain
 python -m eval.play_arena --style rotation
 tensorboard --logdir logs
 ```
@@ -70,7 +72,7 @@ eval/        visual playback scripts (these are what the video records)
 tests/       spec-drift guards
 models/      trained models — REQUIRED NAME, ships in the zip, never gitignored
 logs/        TensorBoard runs — ships in the zip
-results/     training curves, Q-tables, screenshots for the report
+results/     training curves, Q-tables, the sweep tables, screenshots for the report
 report/      report source and exported PDF
 ```
 

@@ -1,0 +1,782 @@
+{
+  "generated": "2026-09-05T23:42:20",
+  "git_commit": "70b1740",
+  "stages": [
+    "explore",
+    "confirm",
+    "final"
+  ],
+  "sweep": {
+    "budget_timesteps": 100000,
+    "control_style": "direct",
+    "confirm_seeds": [
+      0,
+      1,
+      2
+    ],
+    "confirm_top_k": 2,
+    "summary_episodes": 100,
+    "reward_hack_phase_tolerance": 0.02
+  },
+  "baseline_config": {
+    "algorithm": "PPO",
+    "n_envs": 8,
+    "learning_rate": 0.0003,
+    "n_steps": 2048,
+    "batch_size": 512,
+    "gamma": 0.99,
+    "ent_coef": 0.005,
+    "net_arch": [
+      64,
+      64
+    ],
+    "seed": 0
+  },
+  "explore": [
+    {
+      "name": "n_steps-512_s0",
+      "label": "n_steps=512",
+      "stage": "explore",
+      "axis": "n_steps",
+      "value": 512,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "n_steps": 512
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name n_steps-512_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --n-steps 512",
+      "wall_clock_seconds": 9.0,
+      "metrics": {
+        "phase_reached": 1.04,
+        "ep_rew_mean": -11.1531,
+        "spawners_destroyed": 0.17,
+        "enemies_killed": 3.07,
+        "damage_taken": 5.0,
+        "ep_len_mean": 297.31,
+        "episodes": 390.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "gamma-0-95_s0",
+      "label": "gamma=0.95",
+      "stage": "explore",
+      "axis": "gamma",
+      "value": 0.95,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "gamma": 0.95
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name gamma-0-95_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --gamma 0.95",
+      "wall_clock_seconds": 9.7,
+      "metrics": {
+        "phase_reached": 1.03,
+        "ep_rew_mean": -10.0441,
+        "spawners_destroyed": 0.26,
+        "enemies_killed": 4.51,
+        "damage_taken": 5.0,
+        "ep_len_mean": 365.41,
+        "episodes": 405.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "learning_rate-0-001_s0",
+      "label": "learning_rate=0.001",
+      "stage": "explore",
+      "axis": "learning_rate",
+      "value": 0.001,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "learning_rate": 0.001
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name learning_rate-0-001_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --learning-rate 0.001",
+      "wall_clock_seconds": 9.9,
+      "metrics": {
+        "phase_reached": 1.03,
+        "ep_rew_mean": -10.2048,
+        "spawners_destroyed": 0.26,
+        "enemies_killed": 5.96,
+        "damage_taken": 5.0,
+        "ep_len_mean": 526.48,
+        "episodes": 322.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "net_arch-128x128_s0",
+      "label": "net_arch=128x128",
+      "stage": "explore",
+      "axis": "net_arch",
+      "value": [
+        128,
+        128
+      ],
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "net_arch": [
+          128,
+          128
+        ]
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name net_arch-128x128_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --net-arch 128 128",
+      "wall_clock_seconds": 11.0,
+      "metrics": {
+        "phase_reached": 1.02,
+        "ep_rew_mean": -9.0403,
+        "spawners_destroyed": 0.25,
+        "enemies_killed": 6.77,
+        "damage_taken": 5.0,
+        "ep_len_mean": 476.03,
+        "episodes": 329.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": true
+    },
+    {
+      "name": "baseline_s0",
+      "label": "baseline",
+      "stage": "explore",
+      "axis": "baseline",
+      "value": null,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": true,
+      "overrides": {},
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name baseline_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu",
+      "wall_clock_seconds": 9.8,
+      "metrics": {
+        "phase_reached": 1.01,
+        "ep_rew_mean": -12.1369,
+        "spawners_destroyed": 0.11,
+        "enemies_killed": 2.67,
+        "damage_taken": 5.0,
+        "ep_len_mean": 295.69,
+        "episodes": 433.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "ent_coef-0-0_s0",
+      "label": "ent_coef=0.0",
+      "stage": "explore",
+      "axis": "ent_coef",
+      "value": 0.0,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "ent_coef": 0.0
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name ent_coef-0-0_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --ent-coef 0.0",
+      "wall_clock_seconds": 9.7,
+      "metrics": {
+        "phase_reached": 1.0,
+        "ep_rew_mean": -12.2141,
+        "spawners_destroyed": 0.06,
+        "enemies_killed": 3.23,
+        "damage_taken": 5.0,
+        "ep_len_mean": 324.41,
+        "episodes": 418.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "n_steps-4096_s0",
+      "label": "n_steps=4096",
+      "stage": "explore",
+      "axis": "n_steps",
+      "value": 4096,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "n_steps": 4096
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name n_steps-4096_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --n-steps 4096",
+      "wall_clock_seconds": 10.8,
+      "metrics": {
+        "phase_reached": 1.0,
+        "ep_rew_mean": -12.4629,
+        "spawners_destroyed": 0.08,
+        "enemies_killed": 2.36,
+        "damage_taken": 5.0,
+        "ep_len_mean": 272.29,
+        "episodes": 494.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "ent_coef-0-01_s0",
+      "label": "ent_coef=0.01",
+      "stage": "explore",
+      "axis": "ent_coef",
+      "value": 0.01,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "ent_coef": 0.01
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name ent_coef-0-01_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --ent-coef 0.01",
+      "wall_clock_seconds": 9.7,
+      "metrics": {
+        "phase_reached": 1.0,
+        "ep_rew_mean": -12.835999999999999,
+        "spawners_destroyed": 0.01,
+        "enemies_killed": 2.59,
+        "damage_taken": 5.0,
+        "ep_len_mean": 297.6,
+        "episodes": 428.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "learning_rate-0-0001_s0",
+      "label": "learning_rate=0.0001",
+      "stage": "explore",
+      "axis": "learning_rate",
+      "value": 0.0001,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "learning_rate": 0.0001
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name learning_rate-0-0001_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --learning-rate 0.0001",
+      "wall_clock_seconds": 9.8,
+      "metrics": {
+        "phase_reached": 1.0,
+        "ep_rew_mean": -13.040899999999999,
+        "spawners_destroyed": 0.06,
+        "enemies_killed": 1.55,
+        "damage_taken": 5.0,
+        "ep_len_mean": 239.09,
+        "episodes": 469.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    }
+  ],
+  "confirm": [
+    {
+      "label": "n_steps=512",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "runs": [
+        "n_steps-512_s0",
+        "n_steps-512_s1",
+        "n_steps-512_s2"
+      ],
+      "overrides": {
+        "n_steps": 512
+      },
+      "is_baseline": false,
+      "metrics": {
+        "damage_taken": 5.0,
+        "enemies_killed": 3.8699999999999997,
+        "ep_len_mean": 315.8533333333333,
+        "ep_rew_mean": -10.638533333333333,
+        "episodes": 378.0,
+        "episodes_averaged": 100.0,
+        "phase_reached": 1.0266666666666666,
+        "spawners_destroyed": 0.17666666666666667
+      },
+      "spread": {
+        "damage_taken": 0.0,
+        "enemies_killed": 1.5824243004537901,
+        "ep_len_mean": 52.99317335489753,
+        "ep_rew_mean": 1.2629039191042561,
+        "episodes": 23.62202362203543,
+        "episodes_averaged": 0.0,
+        "phase_reached": 0.012472191289246483,
+        "spawners_destroyed": 0.03299831645537221
+      }
+    },
+    {
+      "label": "gamma=0.95",
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "runs": [
+        "gamma-0-95_s0",
+        "gamma-0-95_s1",
+        "gamma-0-95_s2"
+      ],
+      "overrides": {
+        "gamma": 0.95
+      },
+      "is_baseline": false,
+      "metrics": {
+        "damage_taken": 5.0,
+        "enemies_killed": 4.5,
+        "ep_len_mean": 369.49666666666667,
+        "ep_rew_mean": -10.494966666666667,
+        "episodes": 386.0,
+        "episodes_averaged": 100.0,
+        "phase_reached": 1.02,
+        "spawners_destroyed": 0.19999999999999998
+      },
+      "spread": {
+        "damage_taken": 0.0,
+        "enemies_killed": 0.17568911937472573,
+        "ep_len_mean": 6.815630728129439,
+        "ep_rew_mean": 0.3388499405669446,
+        "episodes": 15.937377450509228,
+        "episodes_averaged": 0.0,
+        "phase_reached": 0.008164965809277268,
+        "spawners_destroyed": 0.05354126134736337
+      }
+    }
+  ],
+  "runs": [
+    {
+      "name": "baseline_s0",
+      "label": "baseline",
+      "stage": "explore",
+      "axis": "baseline",
+      "value": null,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": true,
+      "overrides": {},
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name baseline_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu",
+      "wall_clock_seconds": 9.8,
+      "metrics": {
+        "phase_reached": 1.01,
+        "ep_rew_mean": -12.1369,
+        "spawners_destroyed": 0.11,
+        "enemies_killed": 2.67,
+        "damage_taken": 5.0,
+        "ep_len_mean": 295.69,
+        "episodes": 433.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "learning_rate-0-0001_s0",
+      "label": "learning_rate=0.0001",
+      "stage": "explore",
+      "axis": "learning_rate",
+      "value": 0.0001,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "learning_rate": 0.0001
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name learning_rate-0-0001_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --learning-rate 0.0001",
+      "wall_clock_seconds": 9.8,
+      "metrics": {
+        "phase_reached": 1.0,
+        "ep_rew_mean": -13.040899999999999,
+        "spawners_destroyed": 0.06,
+        "enemies_killed": 1.55,
+        "damage_taken": 5.0,
+        "ep_len_mean": 239.09,
+        "episodes": 469.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "learning_rate-0-001_s0",
+      "label": "learning_rate=0.001",
+      "stage": "explore",
+      "axis": "learning_rate",
+      "value": 0.001,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "learning_rate": 0.001
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name learning_rate-0-001_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --learning-rate 0.001",
+      "wall_clock_seconds": 9.9,
+      "metrics": {
+        "phase_reached": 1.03,
+        "ep_rew_mean": -10.2048,
+        "spawners_destroyed": 0.26,
+        "enemies_killed": 5.96,
+        "damage_taken": 5.0,
+        "ep_len_mean": 526.48,
+        "episodes": 322.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "n_steps-512_s0",
+      "label": "n_steps=512",
+      "stage": "explore",
+      "axis": "n_steps",
+      "value": 512,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "n_steps": 512
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name n_steps-512_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --n-steps 512",
+      "wall_clock_seconds": 9.0,
+      "metrics": {
+        "phase_reached": 1.04,
+        "ep_rew_mean": -11.1531,
+        "spawners_destroyed": 0.17,
+        "enemies_killed": 3.07,
+        "damage_taken": 5.0,
+        "ep_len_mean": 297.31,
+        "episodes": 390.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "n_steps-4096_s0",
+      "label": "n_steps=4096",
+      "stage": "explore",
+      "axis": "n_steps",
+      "value": 4096,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "n_steps": 4096
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name n_steps-4096_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --n-steps 4096",
+      "wall_clock_seconds": 10.8,
+      "metrics": {
+        "phase_reached": 1.0,
+        "ep_rew_mean": -12.4629,
+        "spawners_destroyed": 0.08,
+        "enemies_killed": 2.36,
+        "damage_taken": 5.0,
+        "ep_len_mean": 272.29,
+        "episodes": 494.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "ent_coef-0-0_s0",
+      "label": "ent_coef=0.0",
+      "stage": "explore",
+      "axis": "ent_coef",
+      "value": 0.0,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "ent_coef": 0.0
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name ent_coef-0-0_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --ent-coef 0.0",
+      "wall_clock_seconds": 9.7,
+      "metrics": {
+        "phase_reached": 1.0,
+        "ep_rew_mean": -12.2141,
+        "spawners_destroyed": 0.06,
+        "enemies_killed": 3.23,
+        "damage_taken": 5.0,
+        "ep_len_mean": 324.41,
+        "episodes": 418.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "ent_coef-0-01_s0",
+      "label": "ent_coef=0.01",
+      "stage": "explore",
+      "axis": "ent_coef",
+      "value": 0.01,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "ent_coef": 0.01
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name ent_coef-0-01_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --ent-coef 0.01",
+      "wall_clock_seconds": 9.7,
+      "metrics": {
+        "phase_reached": 1.0,
+        "ep_rew_mean": -12.835999999999999,
+        "spawners_destroyed": 0.01,
+        "enemies_killed": 2.59,
+        "damage_taken": 5.0,
+        "ep_len_mean": 297.6,
+        "episodes": 428.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "gamma-0-95_s0",
+      "label": "gamma=0.95",
+      "stage": "explore",
+      "axis": "gamma",
+      "value": 0.95,
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "gamma": 0.95
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name gamma-0-95_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --gamma 0.95",
+      "wall_clock_seconds": 9.7,
+      "metrics": {
+        "phase_reached": 1.03,
+        "ep_rew_mean": -10.0441,
+        "spawners_destroyed": 0.26,
+        "enemies_killed": 4.51,
+        "damage_taken": 5.0,
+        "ep_len_mean": 365.41,
+        "episodes": 405.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": false
+    },
+    {
+      "name": "net_arch-128x128_s0",
+      "label": "net_arch=128x128",
+      "stage": "explore",
+      "axis": "net_arch",
+      "value": [
+        128,
+        128
+      ],
+      "seed": 0,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "net_arch": [
+          128,
+          128
+        ]
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 0 --run-name net_arch-128x128_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --net-arch 128 128",
+      "wall_clock_seconds": 11.0,
+      "metrics": {
+        "phase_reached": 1.02,
+        "ep_rew_mean": -9.0403,
+        "spawners_destroyed": 0.25,
+        "enemies_killed": 6.77,
+        "damage_taken": 5.0,
+        "ep_len_mean": 476.03,
+        "episodes": 329.0,
+        "episodes_averaged": 100.0
+      },
+      "reward_hacking_suspected": true
+    },
+    {
+      "name": "n_steps-512_s1",
+      "label": "n_steps=512",
+      "stage": "confirm",
+      "axis": "n_steps",
+      "value": 512,
+      "seed": 1,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "n_steps": 512
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 1 --run-name n_steps-512_s1 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --n-steps 512",
+      "wall_clock_seconds": 8.7,
+      "metrics": {
+        "phase_reached": 1.01,
+        "ep_rew_mean": -11.862400000000001,
+        "spawners_destroyed": 0.14,
+        "enemies_killed": 2.46,
+        "damage_taken": 5.0,
+        "ep_len_mean": 262.24,
+        "episodes": 399.0,
+        "episodes_averaged": 100.0
+      }
+    },
+    {
+      "name": "n_steps-512_s2",
+      "label": "n_steps=512",
+      "stage": "confirm",
+      "axis": "n_steps",
+      "value": 512,
+      "seed": 2,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "n_steps": 512
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 2 --run-name n_steps-512_s2 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --n-steps 512",
+      "wall_clock_seconds": 8.9,
+      "metrics": {
+        "phase_reached": 1.03,
+        "ep_rew_mean": -8.9001,
+        "spawners_destroyed": 0.22,
+        "enemies_killed": 6.08,
+        "damage_taken": 5.0,
+        "ep_len_mean": 388.01,
+        "episodes": 345.0,
+        "episodes_averaged": 100.0
+      }
+    },
+    {
+      "name": "gamma-0-95_s1",
+      "label": "gamma=0.95",
+      "stage": "confirm",
+      "axis": "gamma",
+      "value": 0.95,
+      "seed": 1,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "gamma": 0.95
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 1 --run-name gamma-0-95_s1 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --gamma 0.95",
+      "wall_clock_seconds": 9.7,
+      "metrics": {
+        "phase_reached": 1.02,
+        "ep_rew_mean": -10.5798,
+        "spawners_destroyed": 0.13,
+        "enemies_killed": 4.71,
+        "damage_taken": 5.0,
+        "ep_len_mean": 363.98,
+        "episodes": 387.0,
+        "episodes_averaged": 100.0
+      }
+    },
+    {
+      "name": "gamma-0-95_s2",
+      "label": "gamma=0.95",
+      "stage": "confirm",
+      "axis": "gamma",
+      "value": 0.95,
+      "seed": 2,
+      "timesteps": 100000,
+      "is_baseline": false,
+      "overrides": {
+        "gamma": 0.95
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 100000 --seed 2 --run-name gamma-0-95_s2 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models --device cpu --gamma 0.95",
+      "wall_clock_seconds": 9.7,
+      "metrics": {
+        "phase_reached": 1.01,
+        "ep_rew_mean": -10.860999999999999,
+        "spawners_destroyed": 0.21,
+        "enemies_killed": 4.28,
+        "damage_taken": 5.0,
+        "ep_len_mean": 379.1,
+        "episodes": 366.0,
+        "episodes_averaged": 100.0
+      }
+    },
+    {
+      "name": "final_n_steps-512_s0",
+      "label": "n_steps=512",
+      "stage": "final",
+      "axis": "n_steps",
+      "value": 512,
+      "seed": 0,
+      "timesteps": 400000,
+      "is_baseline": false,
+      "overrides": {
+        "n_steps": 512
+      },
+      "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 400000 --seed 0 --run-name final_n_steps-512_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/final --device cpu --n-steps 512",
+      "wall_clock_seconds": 30.3,
+      "metrics": {
+        "phase_reached": 1.29,
+        "ep_rew_mean": 2.4954,
+        "spawners_destroyed": 1.01,
+        "enemies_killed": 14.79,
+        "damage_taken": 4.98,
+        "ep_len_mean": 785.46,
+        "episodes": 820.0,
+        "episodes_averaged": 100.0
+      },
+      "model_path": "models/ppo_direct_sweep.zip",
+      "incumbent_path": "models/ppo_direct.zip"
+    }
+  ],
+  "winner": {
+    "label": "n_steps=512",
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "runs": [
+      "n_steps-512_s0",
+      "n_steps-512_s1",
+      "n_steps-512_s2"
+    ],
+    "overrides": {
+      "n_steps": 512
+    },
+    "is_baseline": false,
+    "metrics": {
+      "damage_taken": 5.0,
+      "enemies_killed": 3.8699999999999997,
+      "ep_len_mean": 315.8533333333333,
+      "ep_rew_mean": -10.638533333333333,
+      "episodes": 378.0,
+      "episodes_averaged": 100.0,
+      "phase_reached": 1.0266666666666666,
+      "spawners_destroyed": 0.17666666666666667
+    },
+    "spread": {
+      "damage_taken": 0.0,
+      "enemies_killed": 1.5824243004537901,
+      "ep_len_mean": 52.99317335489753,
+      "ep_rew_mean": 1.2629039191042561,
+      "episodes": 23.62202362203543,
+      "episodes_averaged": 0.0,
+      "phase_reached": 0.012472191289246483,
+      "spawners_destroyed": 0.03299831645537221
+    }
+  },
+  "final": {
+    "name": "final_n_steps-512_s0",
+    "label": "n_steps=512",
+    "stage": "final",
+    "axis": "n_steps",
+    "value": 512,
+    "seed": 0,
+    "timesteps": 400000,
+    "is_baseline": false,
+    "overrides": {
+      "n_steps": 512
+    },
+    "command": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/.venv/bin/python3 -m train.train_arena --style direct --config arena --timesteps 400000 --seed 0 --run-name final_n_steps-512_s0 --log-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep --models-dir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/final --device cpu --n-steps 512",
+    "wall_clock_seconds": 30.3,
+    "metrics": {
+      "phase_reached": 1.29,
+      "ep_rew_mean": 2.4954,
+      "spawners_destroyed": 1.01,
+      "enemies_killed": 14.79,
+      "damage_taken": 4.98,
+      "ep_len_mean": 785.46,
+      "episodes": 820.0,
+      "episodes_averaged": 100.0
+    },
+    "model_path": "models/ppo_direct_sweep.zip",
+    "incumbent_path": "models/ppo_direct.zip"
+  }
+}
