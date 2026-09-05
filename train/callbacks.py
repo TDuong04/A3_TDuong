@@ -8,6 +8,7 @@ scalars alongside `rollout/ep_rew_mean`:
     behaviour/enemies_killed
     behaviour/damage_taken
     behaviour/episode_length
+    behaviour/survival_rate
 
 These curves are the difference between "here is a reward graph" and "here is evidence the agent
 learned to progress", and they are what `training-diagnostician` reads to tell reward hacking apart
@@ -34,6 +35,7 @@ BEHAVIOUR_INFO_KEYS: tuple[str, ...] = (
     "spawners_destroyed",
     "enemies_killed",
     "damage_taken",
+    "terminated",
 )
 
 #: `info` key -> TensorBoard tag. `phase` is logged as `phase_reached` because what the episode
@@ -45,7 +47,13 @@ BEHAVIOUR_TAGS: dict[str, str] = {
     "damage_taken": "behaviour/damage_taken",
 }
 
-#: Monitor's own episode-length key, logged next to the four behavioural ones so a run that is
+#: `terminated` is death; its complement is "still alive when the step cap ran out". Logged
+#: inverted so the curve reads the way its name does — up is better — and separately from
+#: `BEHAVIOUR_TAGS` because it is the only key whose mean is not the mean of the key itself.
+SURVIVAL_KEY = "terminated"
+SURVIVAL_TAG = "behaviour/survival_rate"
+
+#: Monitor's own episode-length key, logged next to the behavioural ones so a run that is
 #: surviving longer without progressing is visible at a glance.
 EPISODE_LENGTH_KEY = "l"
 EPISODE_LENGTH_TAG = "behaviour/episode_length"
@@ -73,7 +81,8 @@ class BehaviourLoggingCallback(BaseCallback):
         self.window = window
         self.episodes_seen = 0
         self._buffers: dict[str, deque[float]] = {
-            tag: deque(maxlen=window) for tag in (*BEHAVIOUR_TAGS.values(), EPISODE_LENGTH_TAG)
+            tag: deque(maxlen=window)
+            for tag in (*BEHAVIOUR_TAGS.values(), EPISODE_LENGTH_TAG, SURVIVAL_TAG)
         }
 
     # --- SB3 hooks -------------------------------------------------------------------------
@@ -108,6 +117,9 @@ class BehaviourLoggingCallback(BaseCallback):
         length = episode.get(EPISODE_LENGTH_KEY)
         if length is not None:
             self._buffers[EPISODE_LENGTH_TAG].append(float(length))
+        terminated = episode.get(SURVIVAL_KEY)
+        if terminated is not None:
+            self._buffers[SURVIVAL_TAG].append(0.0 if terminated else 1.0)
         self.episodes_seen += 1
 
     def _record(self) -> None:

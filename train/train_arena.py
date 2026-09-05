@@ -10,7 +10,7 @@ name is required by the brief; do not rename it or gitignore it.
 Everything a run produces lands under one directory, `logs/<algo>_<style>[_<tag>]_<timestamp>/`:
 
     tb_1/                TensorBoard event files — the rubric's evidence that training happened
-    monitor/*.csv        per-worker episode records, including the four behavioural info keys
+    monitor/*.csv        per-worker episode records, including the behavioural info keys
     run.json             the fully resolved hyperparameters, seed, git commit and wall-clock time
 
 Nothing here reads a hyperparameter from a literal: the baseline is `config/arena.yaml` and every

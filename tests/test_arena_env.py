@@ -685,6 +685,26 @@ class TestInfo:
             if terminated or truncated:
                 break
 
+    def test_info_terminated_matches_the_returned_flag(self):
+        """`behaviour/survival_rate` is this key averaged, so it has to agree with the step tuple.
+
+        Checked on both endings: a step-cap truncation is not a death, and reporting it as one
+        would show a policy learning to survive when it had only learned to run out the clock.
+        """
+        env = quiet_env("rotation", max_episode_steps=2)
+        _obs, _reward, terminated, truncated, info = env.step(RotationAction.NOOP)
+        assert info["terminated"] is terminated is False
+
+        _obs, _reward, terminated, truncated, info = env.step(RotationAction.NOOP)
+        assert truncated is True
+        assert info["terminated"] is terminated is False
+
+        env = quiet_env("rotation")
+        env.player.health = 1
+        overlap_player_with_enemy(env)
+        _obs, _reward, terminated, _truncated, info = env.step(RotationAction.NOOP)
+        assert info["terminated"] is terminated is True
+
     def test_the_counters_track_what_actually_happened(self):
         env = quiet_env("rotation")
         enemy = place_enemy_ahead(env, 110.0)

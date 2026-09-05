@@ -3,7 +3,7 @@
 The pipeline is worth testing for the same reason it is worth building early: a run that trains
 correctly but logs the wrong thing is only discovered hours later, and the fix is to train again.
 So these pin the wiring rather than the learning — that the config is what reaches the model, that
-`Monitor` carries the four behavioural keys through the episode boundary, that the callback turns
+`Monitor` carries the behavioural keys through the episode boundary, that the callback turns
 them into `behaviour/*` scalars in a real event file, and that a run leaves a model, a checkpoint
 and its own resolved config behind.
 
@@ -34,6 +34,7 @@ from train.callbacks import (
     BEHAVIOUR_INFO_KEYS,
     BEHAVIOUR_TAGS,
     EPISODE_LENGTH_TAG,
+    SURVIVAL_TAG,
     BehaviourLoggingCallback,
     make_checkpoint_callback,
 )
@@ -271,8 +272,8 @@ def episode_info(**values) -> dict:
 def test_callback_records_every_behavioural_tag():
     callback = BehaviourLoggingCallback()
     logger = attach(callback)
-    callback.locals = {"infos": [episode_info(phase=2, spawners_destroyed=5,
-                                              enemies_killed=9, damage_taken=1, l=400)]}
+    callback.locals = {"infos": [episode_info(phase=2, spawners_destroyed=5, enemies_killed=9,
+                                              damage_taken=1, terminated=True, l=400)]}
     assert callback._on_step() is True
 
     assert logger.records[BEHAVIOUR_TAGS["phase"]] == 2
@@ -281,6 +282,24 @@ def test_callback_records_every_behavioural_tag():
     assert logger.records[BEHAVIOUR_TAGS["damage_taken"]] == 1
     assert logger.records[EPISODE_LENGTH_TAG] == 400
     assert callback.episodes_seen == 1
+
+
+def test_survival_rate_inverts_termination():
+    """`terminated` is death, so the curve named survival has to be its complement.
+
+    Logged the wrong way round it still looks like a plausible learning curve, which is exactly
+    why it is asserted rather than eyeballed in TensorBoard.
+    """
+    callback = BehaviourLoggingCallback()
+    logger = attach(callback)
+    callback.locals = {"infos": [
+        episode_info(phase=1, spawners_destroyed=0, enemies_killed=0, damage_taken=0,
+                     terminated=True),   # died
+        episode_info(phase=1, spawners_destroyed=0, enemies_killed=0, damage_taken=0,
+                     terminated=False),  # reached the step cap alive
+    ]}
+    callback._on_step()
+    assert logger.records[SURVIVAL_TAG] == 0.5
 
 
 def test_callback_reports_a_rolling_mean_over_its_window():
@@ -360,7 +379,7 @@ def test_a_run_leaves_model_logs_checkpoints_and_its_own_config(scratch_dir: Pat
 
 
 def test_the_event_file_carries_the_behavioural_scalars(scratch_dir: Path):
-    """The criterion in full: the four metrics are readable in TensorBoard, not just in stdout."""
+    """The criterion in full: the metrics are readable in TensorBoard, not just in stdout."""
     from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
     train_arena.train(tiny_args(scratch_dir, run_name="tb", timesteps=1024))
@@ -368,9 +387,10 @@ def test_the_event_file_carries_the_behavioural_scalars(scratch_dir: Path):
     accumulator = EventAccumulator(str(scratch_dir / "logs" / "tb" / "tb_1"))
     accumulator.Reload()
     tags = set(accumulator.Tags()["scalars"])
-    assert set(BEHAVIOUR_TAGS.values()) | {EPISODE_LENGTH_TAG} <= tags
+    expected = set(BEHAVIOUR_TAGS.values()) | {EPISODE_LENGTH_TAG, SURVIVAL_TAG}
+    assert expected <= tags
     assert "rollout/ep_rew_mean" in tags
-    for tag in BEHAVIOUR_TAGS.values():
+    for tag in expected:
         assert accumulator.Scalars(tag), f"{tag} has no points"
 
 
