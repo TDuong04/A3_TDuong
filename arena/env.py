@@ -160,6 +160,8 @@ class ArenaEnv(gym.Env):
         self.damage_taken = 0
         self.episode_reward = 0.0
         self.last_action = 0
+        self._phase_advanced_this_step = False
+        self._last_observation: np.ndarray | None = None
 
         self.player = Player(
             ARENA_WIDTH / 2.0,
@@ -182,6 +184,9 @@ class ArenaEnv(gym.Env):
                 f"{self.control_style!r}"
             )
         self.last_action = action
+        # True for exactly one agent step. The renderer latches it into its own wall-clock
+        # countdown, because at 60 fps a one-step flag would flash the banner for a single frame.
+        self._phase_advanced_this_step = False
 
         reward = REWARD_PER_STEP
         for _ in range(ACTION_REPEAT):
@@ -224,6 +229,27 @@ class ArenaEnv(gym.Env):
     def action_name(self) -> str:
         """The name of the last action, for the HUD: `THRUST`, `SHOOT`, ..."""
         return self.actions(self.last_action).name
+
+    @property
+    def episode_return(self) -> float:
+        """Cumulative environment reward this episode, for the HUD's SCORE field."""
+        return float(self.episode_reward)
+
+    @property
+    def last_observation(self) -> np.ndarray:
+        """The observation most recently handed out, for the overlay panel.
+
+        Falls back to building one, so a renderer attached before the first `step()` -- which is
+        what `--human` mode does -- draws a real vector rather than crashing on `None`.
+        """
+        if self._last_observation is None:
+            return self._observation()
+        return self._last_observation
+
+    @property
+    def phase_just_advanced(self) -> bool:
+        """True for exactly one agent step after the last spawner of a phase was destroyed."""
+        return bool(self._phase_advanced_this_step)
 
     @property
     def phase_settings(self):
@@ -395,13 +421,18 @@ class ArenaEnv(gym.Env):
         if self.spawners:
             return 0.0
         self.phase += 1
+        self._phase_advanced_this_step = True
         self._begin_phase()
         return REWARD_PHASE_ADVANCE
 
     # --- observation and info --------------------------------------------------------------------
 
     def _observation(self) -> np.ndarray:
-        return build_observation(self.player, self.enemies, self.spawners, self.phase)
+        obs = build_observation(self.player, self.enemies, self.spawners, self.phase)
+        # Cached rather than recomputed on demand: the overlay must show the vector the agent was
+        # actually handed on this step, not one rebuilt from a world that has since moved on.
+        self._last_observation = obs
+        return obs
 
     def _info(self) -> dict[str, Any]:
         """The behavioural metrics the TensorBoard callback and the report read.
