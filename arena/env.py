@@ -448,6 +448,10 @@ class ArenaEnv(gym.Env):
             "health": self.player.health,
             "steps": self.steps,
             "episode_reward": self.episode_reward,
+            # Death, as opposed to the step cap. Monitor copies this into the episode record so the
+            # training callback can log a survival rate; without it the callback would default the
+            # key to False and log a constant 1.0 for the whole run, silently.
+            "terminated": not self.player.alive,
         }
 
     def __repr__(self) -> str:
