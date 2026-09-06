@@ -8,6 +8,9 @@ requires-python = ">=3.11"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+markers = [
+    "slow: trains a real model; minutes rather than seconds",
+]
 
 [tool.ruff]
 line-length = 100
