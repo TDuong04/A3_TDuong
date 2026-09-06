@@ -29,7 +29,9 @@ CLAUDE.md
 # Do not add them here.
 
 .history/
-results/
-docs/tickets/
-logs/
-models/
+
+# Only recovery scaffolding is ignored here: weights that regenerate for free and that nobody
+# reads back. A hyperparameter sweep writes roughly 7MB of these per run, so they compound —
+# unlike the figures, curves, event files and tickets, which are read, reviewed and submitted.
+logs/**/*.zip
+models/checkpoints/
