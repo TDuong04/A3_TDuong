@@ -56,6 +56,7 @@ dumper and costs nothing to maintain.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from collections.abc import Mapping, Sequence
@@ -79,6 +80,7 @@ from gridworld.render import (
     COLOR_TEXT,
     COLOR_TEXT_DIM,
     CONTROLS,
+    LearnerInfo,
     PlaybackApp,
     RenderConfig,
 )
@@ -106,6 +108,10 @@ QTABLE_PATTERN = "qtable_level{level}_{algo}_seed{seed}.npz"
 QTABLE_INTRINSIC_GLOB = "qtable_level{level}_{algo}_strength*_seed{seed}.npz"
 
 _SEED_IN_NAME = re.compile(r"_seed(\d+)\.npz$")
+
+#: `strength0p25` in an intrinsic-run filename -> 0.25. The `p` stands in for the decimal point
+#: because a dot in a filename stem reads as an extension to half the tools that touch `results/`.
+_STRENGTH_IN_NAME = re.compile(r"_strength([0-9p]+)_")
 
 
 class PlaybackError(Exception):
@@ -249,6 +255,35 @@ def load_policy_tables(
     return tables
 
 
+def load_learner_info(q_table_path: Path) -> LearnerInfo | None:
+    """The hyperparameters behind a Q-table, for the HUD's learner block.
+
+    Prefers the `summary_*.json` the trainer writes beside the table, because that records what the
+    table on screen was *actually* trained with. Falls back to what the filename itself proves —
+    the algorithm, and the intrinsic strength on a level-6 run — rather than borrowing numbers from
+    `config/gridworld.yaml`: the config describes what a run today would use, which is a different
+    claim and silently becomes a false one the moment anyone edits it.
+
+    Returns None when the filename says nothing either, so the panel is simply not drawn.
+    """
+    name = q_table_path.name
+    summary_path = q_table_path.with_name(name.replace("qtable_", "summary_", 1)).with_suffix(
+        ".json"
+    )
+    if summary_path.exists():
+        try:
+            return LearnerInfo.from_summary(json.loads(summary_path.read_text()))
+        except (OSError, ValueError):
+            pass  # a corrupt summary costs the panel, not the demo
+
+    algo = next((key for key in ALGO_LABELS if f"_{key}_" in name), "")
+    strength_match = _STRENGTH_IN_NAME.search(name)
+    strength = float(strength_match.group(1).replace("p", ".")) if strength_match else None
+    if not algo and strength is None:
+        return None
+    return LearnerInfo(algorithm=algo, intrinsic_strength=strength)
+
+
 # --- the greedy policy --------------------------------------------------------------------------
 
 
@@ -305,6 +340,7 @@ class ReplayApp(PlaybackApp):
         headless: bool = False,
         cell_size: int | None = None,
         fps: int | None = None,
+        learner: LearnerInfo | None = None,
     ) -> None:
         super().__init__(
             level,
@@ -314,6 +350,7 @@ class ReplayApp(PlaybackApp):
             headless=headless,
             cell_size=cell_size,
             fps=fps,
+            learner=learner,
         )
         self.greedy_policy = policy
         self.restart_seconds = restart_seconds
@@ -386,6 +423,7 @@ def build_app(
     config = PlaybackConfig.from_yaml() if config is None else config
     tables = load_policy_tables(results_dir, algo, required_level=level, seed=seed)
     policy = GreedyPolicy(tables, rng=make_rng(policy_seed))
+    learner = load_learner_info(resolve_q_table(results_dir, level, algo, seed))
 
     app = ReplayApp(
         level,
@@ -396,6 +434,7 @@ def build_app(
         headless=headless,
         cell_size=cell_size,
         fps=fps,
+        learner=learner,
     )
     if show_arrows is not None:
         app.renderer.show_policy_arrows = bool(show_arrows)

@@ -735,3 +735,89 @@ def test_env_does_not_import_the_renderer():
     assert result.returncode == 0, (
         f"importing gridworld.env pulled in: {'; '.join(leaked) or result.stdout}\n{result.stderr}"
     )
+
+
+# --- the learner panel (rubric B/C visibility) -------------------------------------------------
+
+
+class _RecordingFont:
+    """A font that remembers the strings drawn through it."""
+
+    def __init__(self, font) -> None:
+        self.font, self.drawn = font, []
+
+    def render(self, text, *args, **kwargs):
+        self.drawn.append(text)
+        return self.font.render(text, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.font, name)
+
+
+FULL_SUMMARY = {
+    "level": 1, "algo": "sarsa", "seed": 0, "episodes": 8000, "alpha": 0.1, "gamma": 0.95,
+    "epsilon_start": 1.0, "epsilon_end": 0.05, "epsilon_decay_episodes": 6000,
+}
+
+
+class TestLearnerInfo:
+    def test_a_summary_becomes_the_lines_the_panel_draws(self):
+        rows = dict(render_module.LearnerInfo.from_summary(FULL_SUMMARY).lines())
+        assert rows["algorithm"] == "SARSA"
+        assert rows["alpha"] == "0.1"
+        assert rows["gamma"] == "0.95"
+        assert rows["epsilon"] == "1 -> 0.05"
+        assert rows["decay over"] == "6000 ep"
+
+    def test_the_algorithm_key_is_spelled_out_for_the_viewer(self):
+        """`q` on screen would not tell a marker which algorithm produced the policy."""
+        rows = dict(render_module.LearnerInfo.from_summary({**FULL_SUMMARY, "algo": "q"}).lines())
+        assert rows["algorithm"] == "Q-learning"
+
+    def test_missing_fields_are_skipped_rather_than_invented(self):
+        """A table whose training summary predates this panel still plays back; it just says less.
+        Printing a default here would put a schedule on screen that the table never saw."""
+        rows = dict(render_module.LearnerInfo(algorithm="q").lines())
+        assert rows == {"algorithm": "Q-learning"}
+
+    def test_an_empty_info_draws_nothing_at_all(self):
+        assert render_module.LearnerInfo().lines() == ()
+
+    def test_the_intrinsic_strength_is_shown_when_there_is_one(self):
+        """Rubric row F is about the bonus, so its strength belongs on screen for level 6."""
+        rows = dict(render_module.LearnerInfo(algorithm="q", intrinsic_strength=0.25).lines())
+        assert rows["intrinsic"] == "0.25"
+
+
+class TestLearnerPanel:
+    def test_the_hyperparameters_reach_the_screen(self, renderer):
+        """CLAUDE.md's visibility rule: epsilon, alpha and gamma must be legible in the window,
+        not only in a log the marker never opens."""
+        env = GridWorld(level_index=1, seed=0)
+        renderer.font_small = _RecordingFont(renderer.font_small)
+        renderer.font_title = _RecordingFont(renderer.font_title)
+        info = render_module.LearnerInfo.from_summary(FULL_SUMMARY)
+        renderer.draw(env, None, {"learner": info})
+
+        drawn = renderer.font_small.drawn + renderer.font_title.drawn
+        assert "Learner" in drawn
+        for text in ("SARSA", "alpha", "0.1", "gamma", "0.95", "1 -> 0.05"):
+            assert text in drawn, f"{text!r} never reached the screen"
+
+    def test_the_panel_is_absent_without_a_learner(self, renderer):
+        env = GridWorld(level_index=1, seed=0)
+        renderer.font_title = _RecordingFont(renderer.font_title)
+        renderer.draw(env, None, {})
+        assert "Learner" not in renderer.font_title.drawn
+
+    def test_the_controls_legend_survives_the_new_block(self, renderer):
+        """The learner block is drawn above the controls; neither may push the other off."""
+        env = GridWorld(level_index=1, seed=0)
+        renderer.font_title = _RecordingFont(renderer.font_title)
+        renderer.draw(env, None, {"learner": render_module.LearnerInfo.from_summary(FULL_SUMMARY)})
+        assert {"Learner", "Controls", "Overlays"} <= set(renderer.font_title.drawn)
+
+    def test_a_non_learner_status_value_is_ignored(self, renderer):
+        """`status` is a loose mapping from the app; a stray value must not crash the window."""
+        env = GridWorld(level_index=0, seed=0)
+        renderer.draw(env, None, {"learner": "sarsa"})

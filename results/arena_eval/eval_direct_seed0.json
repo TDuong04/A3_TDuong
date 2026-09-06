@@ -1,0 +1,25 @@
+{
+  "style": "direct",
+  "episodes": 3,
+  "seed": 0,
+  "return_mean": 8.90333333333316,
+  "return_std": 13.486428569326682,
+  "phase_mean": 1.6666666666666667,
+  "phase_max": 2,
+  "phase_cleared_episodes": 2,
+  "spawners_mean": 1.6666666666666667,
+  "enemies_mean": 14.0,
+  "steps_mean": 759.6666666666666,
+  "survival_rate": 0.0,
+  "returns": [
+    14.739999999999961,
+    -9.73999999999998,
+    21.709999999999503
+  ],
+  "phases": [
+    2,
+    1,
+    2
+  ],
+  "generated": "2026-09-06T11:16:18+00:00"
+}

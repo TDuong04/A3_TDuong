@@ -102,6 +102,13 @@ HEATMAP_STOPS: tuple[tuple[int, int, int], ...] = (
 )
 HEATMAP_ALPHA = 140
 
+#: How the training scripts' short algorithm keys read on screen. Spelling out "SARSA" and
+#: "Q-learning" is the difference between a marker recognising the on-policy run and guessing.
+ALGORITHM_LABELS: dict[str, str] = {
+    "q": "Q-learning",
+    "sarsa": "SARSA",
+}
+
 CONTROLS: tuple[tuple[str, str], ...] = (
     ("SPACE", "pause / resume"),
     ("N", "single step"),
@@ -113,6 +120,77 @@ CONTROLS: tuple[tuple[str, str], ...] = (
     ("WASD / arrows", "human play"),
     ("ESC", "quit"),
 )
+
+
+@dataclass(frozen=True)
+class LearnerInfo:
+    """The hyperparameters that produced the policy on screen, for the HUD to display.
+
+    Rubric rows B and C are about the *algorithm*, not the route the agent walks, and a marker
+    watching a replay cannot tell Q-learning from SARSA by looking at the ship — the two draw
+    identical arrows on an easy level. Naming the algorithm and its schedule on screen is what
+    makes the on-camera comparison legible, and it is the CLAUDE.md "visibility first" rule
+    applied to the two rows it matters most for.
+
+    Every field is optional because playback must still work against a Q-table whose training
+    summary was deleted or predates this panel; missing values simply do not draw.
+    """
+
+    algorithm: str = ""
+    alpha: float | None = None
+    gamma: float | None = None
+    epsilon_start: float | None = None
+    epsilon_end: float | None = None
+    epsilon_decay_episodes: int | None = None
+    episodes: int | None = None
+    intrinsic_strength: float | None = None
+
+    @classmethod
+    def from_summary(cls, summary: Mapping[str, Any]) -> LearnerInfo:
+        """Build from a `summary_level*_*.json` written by `train.train_gridworld`.
+
+        Reading the summary rather than re-reading `config/gridworld.yaml` matters: the config says
+        what training *would* use today, the summary says what this Q-table was actually trained
+        with. Those differ the moment anyone edits the config, and the screen must not claim a
+        schedule the table on screen never saw.
+        """
+        def _float(key: str) -> float | None:
+            value = summary.get(key)
+            return None if value is None else float(value)
+
+        def _int(key: str) -> int | None:
+            value = summary.get(key)
+            return None if value is None else int(value)
+
+        return cls(
+            algorithm=str(summary.get("algo", "") or ""),
+            alpha=_float("alpha"),
+            gamma=_float("gamma"),
+            epsilon_start=_float("epsilon_start"),
+            epsilon_end=_float("epsilon_end"),
+            epsilon_decay_episodes=_int("epsilon_decay_episodes"),
+            episodes=_int("episodes"),
+            intrinsic_strength=_float("intrinsic_strength"),
+        )
+
+    def lines(self) -> tuple[tuple[str, str], ...]:
+        """Label/value pairs to draw, skipping anything this table has no record of."""
+        rows: list[tuple[str, str]] = []
+        if self.algorithm:
+            rows.append(("algorithm", ALGORITHM_LABELS.get(self.algorithm, self.algorithm)))
+        if self.alpha is not None:
+            rows.append(("alpha", f"{self.alpha:g}"))
+        if self.gamma is not None:
+            rows.append(("gamma", f"{self.gamma:g}"))
+        if self.epsilon_start is not None and self.epsilon_end is not None:
+            rows.append(("epsilon", f"{self.epsilon_start:g} -> {self.epsilon_end:g}"))
+        if self.epsilon_decay_episodes is not None:
+            rows.append(("decay over", f"{self.epsilon_decay_episodes} ep"))
+        if self.episodes is not None:
+            rows.append(("trained", f"{self.episodes} ep"))
+        if self.intrinsic_strength is not None:
+            rows.append(("intrinsic", f"{self.intrinsic_strength:g}"))
+        return tuple(rows)
 
 
 @dataclass(frozen=True)
@@ -603,6 +681,13 @@ class GridRenderer:
 
         x = panel.left + 12
         y = panel.top + 10
+
+        # The learner block goes first: it is the rubric-bearing half of this panel, and on a short
+        # level the controls are what should scroll off the bottom, not the hyperparameters.
+        learner = status.get("learner")
+        if isinstance(learner, LearnerInfo):
+            y = self._draw_learner_block(surface, learner, x, y)
+
         title = self.font_title.render("Controls", True, COLOR_ACCENT)
         surface.blit(title, (x, y))
         y += title.get_height() + 6
@@ -633,6 +718,21 @@ class GridRenderer:
                 label = self.font_small.render(line, True, COLOR_TEXT)
                 surface.blit(label, (x, y))
                 y += label.get_height() + 2
+
+    def _draw_learner_block(
+        self, surface: pygame.Surface, learner: LearnerInfo, x: int, y: int
+    ) -> int:
+        """Algorithm name, alpha, gamma and the epsilon schedule. Returns the y it finished at."""
+        title = self.font_title.render("Learner", True, COLOR_ACCENT)
+        surface.blit(title, (x, y))
+        y += title.get_height() + 6
+        value_x = x + int(self.legend_width * 0.46)
+        for label, value in learner.lines():
+            surface.blit(self.font_small.render(label, True, COLOR_TEXT_DIM), (x, y))
+            rendered = self.font_small.render(value, True, COLOR_TEXT)
+            surface.blit(rendered, (value_x, y))
+            y += rendered.get_height() + 4
+        return y + 8
 
     # --- window plumbing (no-ops when headless) -----------------------------------------------
 
@@ -694,10 +794,12 @@ class PlaybackApp:
         headless: bool = False,
         cell_size: int | None = None,
         fps: int | None = None,
+        learner: LearnerInfo | None = None,
     ) -> None:
         self.seed = seed
         self.policy = policy
         self.q_tables = q_tables
+        self.learner = learner
         self.renderer = renderer or GridRenderer(cell_size, fps, headless=headless)
         self.env = GridWorld(level_index=level, seed=seed)
         self.steps_per_second = self.renderer.config.steps_per_second
@@ -730,6 +832,7 @@ class PlaybackApp:
             "mode": self.mode,
             "steps_per_second": self.steps_per_second,
             "message": self.message,
+            "learner": self.learner,
         }
 
     def _apply_speed(self) -> None:

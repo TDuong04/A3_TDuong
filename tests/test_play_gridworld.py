@@ -15,6 +15,7 @@ evidence that anything was drawn on it.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -38,6 +39,7 @@ from eval.play_gridworld import (  # noqa: E402
     build_app,
     build_compare_app,
     find_q_table,
+    load_learner_info,
     load_policy_tables,
     resolve_q_table,
     trained_seeds,
@@ -257,3 +259,56 @@ class TestMonsterLevels:
                 app.policy_step()
             positions.add(tuple(sorted(app.env.monsters)))
         assert len(positions) > 1, "monster positions never differed across replays"
+
+
+# --- the learner block's data source ------------------------------------------------------------
+
+
+class TestLearnerInfoLoading:
+    """What the HUD says about the policy has to come from the run that produced it."""
+
+    def test_the_training_summary_is_read_from_beside_the_table(self):
+        info = load_learner_info(RESULTS / "qtable_level1_q_seed0.npz")
+        assert info is not None
+        rows = dict(info.lines())
+        assert rows["algorithm"] == "Q-learning"
+        assert "alpha" in rows and "gamma" in rows and "epsilon" in rows
+
+    def test_the_schedule_shown_is_the_one_that_trained_the_table(self):
+        """Not `config/gridworld.yaml`. The config says what a run today would use, which becomes
+        a different — and false — claim the moment anyone edits it."""
+        summary = json.loads((RESULTS / "summary_level1_q_seed0.json").read_text())
+        rows = dict(load_learner_info(RESULTS / "qtable_level1_q_seed0.npz").lines())
+        assert rows["epsilon"] == f"{summary['epsilon_start']:g} -> {summary['epsilon_end']:g}"
+        assert rows["alpha"] == f"{summary['alpha']:g}"
+
+    def test_an_intrinsic_run_falls_back_to_what_the_filename_proves(self):
+        """The level-6 sweep writes no per-run summary, but its filename carries the strength —
+        which is the one number rubric row F is about."""
+        info = load_learner_info(RESULTS / "qtable_level6_q_strength0p25_seed0.npz")
+        rows = dict(info.lines())
+        assert rows["intrinsic"] == "0.25"
+        assert rows["algorithm"] == "Q-learning"
+        assert "alpha" not in rows  # never borrowed from config
+
+    def test_a_table_that_says_nothing_gets_no_panel(self):
+        assert load_learner_info(EMPTY_RESULTS / "qtable_level9_zzz_seed0.npz") is None
+
+    def test_a_corrupt_summary_costs_the_panel_not_the_demo(self, monkeypatch):
+        broken = RESULTS / "qtable_level1_q_seed0.npz"
+        monkeypatch.setattr(Path, "read_text", lambda self, *a, **k: "{not json")
+        assert load_learner_info(broken) is not None  # falls back to the filename
+
+    def test_playback_puts_the_learner_on_screen(self):
+        """End to end: the app built for a marker to watch carries the block."""
+        app = build_app(1, "sarsa", seed=0, headless=True)
+        assert app.status()["learner"] is not None
+        assert dict(app.status()["learner"].lines())["algorithm"] == "SARSA"
+
+    def test_both_compare_panels_show_their_own_algorithm(self):
+        """Rubric C2 is "the same exploration schedule": two panels, two algorithm names, one
+        identical epsilon line — visible side by side rather than asserted in prose."""
+        app = build_compare_app(COMPARE_LEVEL, seed=0, headless=True)
+        rows = [dict(panel.status()["learner"].lines()) for panel in app.apps]
+        assert [r["algorithm"] for r in rows] == ["Q-learning", "SARSA"]
+        assert rows[0]["epsilon"] == rows[1]["epsilon"]

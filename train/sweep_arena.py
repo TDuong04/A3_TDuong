@@ -74,7 +74,7 @@ DEFAULT_RESULTS_DIR = REPO_ROOT / "results" / "arena_sweep"
 DEFAULT_MODELS_DIR = REPO_ROOT / "models"
 
 #: Stage names in the order they must run; `--stages` accepts any prefix of this sequence.
-STAGES: tuple[str, ...] = ("explore", "confirm", "final")
+STAGES: tuple[str, ...] = ("explore", "confirm", "final", "promote")
 
 #: Config fields the sweep may vary, mapped to the `train_arena` flag that overrides each one.
 AXIS_FLAGS: dict[str, str] = {
@@ -115,6 +115,11 @@ class SweepConfig:
     confirm_top_k: int
     summary_episodes: int
     reward_hack_phase_tolerance: float
+    #: Deterministic episodes per model in the promote stage's head-to-head. The training-time
+    #: means the tables above are ranked on are stochastic-policy rollouts averaged over a moving
+    #: window; the decision to promote has to be made on the deterministic policy that actually
+    #: ships, which is a different measurement and occasionally a different answer.
+    promote_episodes: int = 30
 
     @classmethod
     def from_yaml(cls, name: str = "arena", section: str = "sweep") -> SweepConfig:
@@ -465,16 +470,107 @@ def render_report(report: dict[str, Any]) -> str:
             f"{_cell(final['metrics']['ep_rew_mean'])}.",
             "",
             f"This is **not** promoted to `{final.get('incumbent_path', 'models/')}` "
-            "automatically. "
-            "Compare the two under `deterministic=True` first and promote only if the tuned model "
-            "actually wins — when the axes separate by less than their seed noise, the ranking "
-            "above is not evidence that it will.",
+            "automatically — when the axes separate by less than their seed noise, the ranking "
+            "above is not evidence that the tuned model will win. The head-to-head below settles "
+            "it under `deterministic=True`.",
             "",
         ]
+
+    if report.get("head_to_head"):
+        lines += _head_to_head_section(report["head_to_head"])
     return "\n".join(lines)
 
 
+def _head_to_head_section(comparison: dict[str, Any]) -> list[str]:
+    """The promote decision, as a table and a stated verdict.
+
+    Written whichever way it goes. A sweep that ends "the tuned config lost, we shipped the
+    incumbent" is a result — it is the honest report of a negative finding, and it is much better
+    evidence of real tuning than a table whose winner nobody ever checked.
+    """
+    rows = []
+    for role in ("challenger", "incumbent"):
+        entry = comparison.get(role) or {}
+        metrics = entry.get("metrics")
+        if metrics is None:
+            rows.append(f"| {role} | `{entry.get('path', '?')}` | not on disk | — | — | — |")
+            continue
+        rows.append(
+            f"| {role} | `{entry['path']}` | {metrics['return_mean']:+.2f} "
+            f"± {metrics['return_std']:.2f} | {metrics['phase_mean']:.2f} | "
+            f"{metrics['phase_cleared_episodes']}/{metrics['episodes']} | "
+            f"{metrics['spawners_mean']:.2f} |"
+        )
+    return [
+        "## Promote or not — head-to-head",
+        "",
+        f"Both models over the same {comparison['episodes']} seeded episodes of control style "
+        f"`{comparison['style']}`, acting with `deterministic=True`.",
+        "",
+        "| Role | Model | Return | Phase reached | Phases cleared | Spawners |",
+        "|------|-------|-------:|--------------:|---------------:|---------:|",
+        *rows,
+        "",
+        f"**Verdict: {comparison['verdict']}.**",
+        "",
+    ]
+
+
 # --- orchestration ---------------------------------------------------------------------------
+
+
+def head_to_head(
+    challenger: Path, incumbent: Path, style: str, episodes: int, algo: str = "ppo"
+) -> dict[str, Any]:
+    """Run the tuned model and the shipped one over the same deterministic episodes.
+
+    The sweep ranks configs on training-time means over a moving window of stochastic rollouts.
+    What ships is the deterministic policy, evaluated from a fixed seed sequence — a different
+    measurement that can disagree, and the only one that answers "should this be promoted".
+    Leaving that comparison as an instruction in the table means the report cites a winner nobody
+    checked, so the sweep now performs it and records the answer.
+
+    A model that cannot be measured is not an error either: on a fresh clone there is nothing to
+    promote over, and a zip that will not load is a reason to skip the comparison, not to lose the
+    sweep. This stage runs after every run has finished but before the report is written, so an
+    exception here would throw away hours of training to save a table nobody could read anyway.
+    """
+    from stable_baselines3 import DQN, PPO
+
+    from eval.play_arena import evaluate
+
+    def measure(path: Path) -> dict[str, Any] | None:
+        """Loaded by path, not by `load_agent`: the tuned model's filename carries a `_sweep`
+        suffix that the canonical `<algo>_<style>.zip` lookup would never find."""
+        if not path.exists():
+            return None
+        try:
+            agent = {"ppo": PPO, "dqn": DQN}[algo].load(path, device="cpu")
+            return evaluate(style, episodes=episodes, seed=0, algo=algo, agent=agent)
+        except Exception as error:  # noqa: BLE001 - see the docstring
+            print(f"[sweep] could not evaluate {path.name}: {error}")
+            return None
+
+    tuned = measure(challenger)
+    shipped = measure(incumbent)
+    verdict = "no comparable incumbent on disk"
+    promote = False
+    if tuned is not None and shipped is not None:
+        # Phase progression first, episode reward as the tie-break: the same ordering the sweep
+        # tables rank on, so the promote decision cannot contradict the ranking that produced it.
+        promote = (tuned["phase_mean"], tuned["return_mean"]) > (
+            shipped["phase_mean"],
+            shipped["return_mean"],
+        )
+        verdict = "promote the tuned model" if promote else "keep the incumbent"
+    return {
+        "episodes": episodes,
+        "style": style,
+        "challenger": {"path": _repo_relative(challenger), "metrics": tuned},
+        "incumbent": {"path": _repo_relative(incumbent), "metrics": shipped},
+        "promote": promote,
+        "verdict": verdict,
+    }
 
 
 def _repo_relative(path: Path) -> str:
@@ -550,13 +646,40 @@ def aggregate(label: str, runs: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def rerender(results_dir: Path) -> dict[str, Any]:
+def rerender(
+    results_dir: Path,
+    *,
+    promote: bool = False,
+    models_dir: Path | None = None,
+    config_name: str = "arena",
+) -> dict[str, Any]:
     """Rebuild `sweep_table.md` from the recorded runs, without training anything again.
 
     The JSON is the record of what happened; the Markdown is a view of it. Editing the wording of a
     report should never mean spending another sweep to see the change.
+
+    `promote=True` additionally measures the head-to-head against the models already on disk and
+    folds the verdict into both artefacts. That is a measurement, not a re-render, so it is opt-in
+    — but it costs a couple of minutes rather than a couple of hours, which is what makes it
+    reasonable to answer the promote question on an already-completed sweep.
     """
     report = json.loads((results_dir / "sweep_runs.json").read_text(encoding="utf-8"))
+    if promote and report.get("final"):
+        sweep = SweepConfig.from_yaml(config_name)
+        baseline = ArenaTrainConfig.from_yaml(config_name)
+        directory = Path(models_dir) if models_dir is not None else DEFAULT_MODELS_DIR
+        stem = f"{baseline.algorithm.lower()}_{sweep.control_style}"
+        print(f"[sweep] head-to-head over {sweep.promote_episodes} deterministic episodes")
+        report["head_to_head"] = head_to_head(
+            directory / f"{stem}_sweep.zip",
+            directory / f"{stem}.zip",
+            sweep.control_style,
+            sweep.promote_episodes,
+            baseline.algorithm.lower(),
+        )
+        print(f"[sweep] verdict: {report['head_to_head']['verdict']}")
+        (results_dir / "sweep_runs.json").write_text(
+            json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
     (results_dir / "sweep_table.md").write_text(render_report(report), encoding="utf-8")
     print(f"[sweep] re-rendered {results_dir / 'sweep_table.md'}")
     return report
@@ -565,7 +688,12 @@ def rerender(results_dir: Path) -> dict[str, Any]:
 def run_sweep(args: argparse.Namespace) -> dict[str, Any]:
     """Run the requested stages end to end and write the JSON and Markdown artefacts."""
     if args.report_only:
-        return rerender(Path(args.results_dir))
+        return rerender(
+            Path(args.results_dir),
+            promote=args.promote,
+            models_dir=Path(args.models_dir),
+            config_name=args.config,
+        )
 
     baseline = ArenaTrainConfig.from_yaml(args.config)
     sweep = SweepConfig.from_yaml(args.config)
@@ -669,6 +797,19 @@ def run_sweep(args: argparse.Namespace) -> dict[str, Any]:
         report["runs"].append(final)
         report["final"] = final
 
+    # --- stage 4: does the tuned model actually beat the one that ships? ---
+    if "promote" in stages and report.get("final"):
+        stem = f"{baseline.algorithm.lower()}_{sweep.control_style}"
+        print(f"\n[sweep] head-to-head over {sweep.promote_episodes} deterministic episodes")
+        report["head_to_head"] = head_to_head(
+            Path(args.models_dir) / f"{stem}_sweep.zip",
+            Path(args.models_dir) / f"{stem}.zip",
+            sweep.control_style,
+            sweep.promote_episodes,
+            baseline.algorithm.lower(),
+        )
+        print(f"[sweep] verdict: {report['head_to_head']['verdict']}")
+
     results_dir.mkdir(parents=True, exist_ok=True)
     (results_dir / "sweep_runs.json").write_text(
         json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
@@ -700,6 +841,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="print the run plan and exit without training")
     parser.add_argument("--report-only", action="store_true",
                         help="re-render sweep_table.md from an existing sweep_runs.json")
+    parser.add_argument("--promote", action="store_true",
+                        help="with --report-only, also measure the head-to-head against the "
+                             "models on disk and record the verdict")
     args = parser.parse_args(argv)
 
     stages = [stage.strip() for stage in args.stages.split(",") if stage.strip()]

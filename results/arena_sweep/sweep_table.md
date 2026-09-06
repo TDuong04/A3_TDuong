@@ -49,4 +49,15 @@ The best 2 configs re-run on seeds 0, 1, 2. A one-seed win is not a result.
 
 Retrained at the full budget of 400,000 timesteps and saved to `models/ppo_direct_sweep.zip` (30s). Final-run means over its last 100 episodes: phase reached 1.290, episode reward 2.50.
 
-This is **not** promoted to `models/ppo_direct.zip` automatically. Compare the two under `deterministic=True` first and promote only if the tuned model actually wins — when the axes separate by less than their seed noise, the ranking above is not evidence that it will.
+This is **not** promoted to `models/ppo_direct.zip` automatically — when the axes separate by less than their seed noise, the ranking above is not evidence that the tuned model will win. The head-to-head below settles it under `deterministic=True`.
+
+## Promote or not — head-to-head
+
+Both models over the same 30 seeded episodes of control style `direct`, acting with `deterministic=True`.
+
+| Role | Model | Return | Phase reached | Phases cleared | Spawners |
+|------|-------|-------:|--------------:|---------------:|---------:|
+| challenger | `models/ppo_direct_sweep.zip` | -4.16 ± 10.05 | 1.00 | 0/30 | 0.13 |
+| incumbent | `models/ppo_direct.zip` | +17.14 ± 19.00 | 1.93 | 22/30 | 2.60 |
+
+**Verdict: keep the incumbent.**
