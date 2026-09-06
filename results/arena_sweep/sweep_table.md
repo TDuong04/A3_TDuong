@@ -58,6 +58,6 @@ Both models over the same 30 seeded episodes of control style `direct`, acting w
 | Role | Model | Return | Phase reached | Phases cleared | Spawners |
 |------|-------|-------:|--------------:|---------------:|---------:|
 | challenger | `models/ppo_direct_sweep.zip` | -4.16 ± 10.05 | 1.00 | 0/30 | 0.13 |
-| incumbent | `models/ppo_direct.zip` | +17.14 ± 19.00 | 1.93 | 22/30 | 2.60 |
+| incumbent | `models/ppo_direct.zip` | +26.09 ± 19.01 | 2.47 | 29/30 | 4.57 |
 
 **Verdict: keep the incumbent.**
