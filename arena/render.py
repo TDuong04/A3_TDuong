@@ -46,6 +46,7 @@ from common.config import load_yaml
 
 from .constants import ARENA_HEIGHT, ARENA_WIDTH, FPS
 from .observation import describe
+from .policy_view import PolicyView
 
 # --- palette (simple shapes, high contrast so the video reads at small sizes) --------------------
 
@@ -69,12 +70,18 @@ COLOR_ACCENT = (238, 206, 66)
 COLOR_OVERLAY_ENEMY = (255, 120, 110)
 COLOR_OVERLAY_SPAWNER = (216, 150, 250)
 COLOR_OVERLAY_HEADING = (120, 230, 190)
+# Distinct from COLOR_PLAYER and COLOR_ACCENT on purpose: the panel is read by counting exact
+# pixel values in the render tests, and a colour shared with the ship makes that ambiguous.
+COLOR_POLICY_BAR = (92, 164, 246)
+COLOR_POLICY_BAR_CHOSEN = (250, 196, 40)
+COLOR_POLICY_TRACK = (52, 56, 68)
 
 #: How long the phase-transition banner stays on screen, in seconds of wall time.
 BANNER_SECONDS = 1.6
 
 CONTROLS: tuple[tuple[str, str], ...] = (
     ("O / TAB", "observation overlay"),
+    ("V", "policy overlay"),
     ("ESC", "quit"),
 )
 
@@ -85,6 +92,7 @@ class ArenaRenderConfig:
 
     fps: int = FPS
     show_observation_overlay: bool = True
+    show_policy_overlay: bool = True
 
     @classmethod
     def from_yaml(cls, name: str = "arena", section: str = "evaluation") -> ArenaRenderConfig:
@@ -95,6 +103,9 @@ class ArenaRenderConfig:
             fps=int(block.get("fps", defaults.fps)),
             show_observation_overlay=bool(
                 block.get("show_observation_overlay", defaults.show_observation_overlay)
+            ),
+            show_policy_overlay=bool(
+                block.get("show_policy_overlay", defaults.show_policy_overlay)
             ),
         )
 
@@ -133,6 +144,7 @@ class ArenaRenderer:
         self.caption = caption
 
         self.show_observation_overlay = self.config.show_observation_overlay
+        self.show_policy_overlay = self.config.show_policy_overlay
         self.should_close = False
 
         # Fonts are the only pygame subsystem needed off-screen, and font.init() is independent of
@@ -182,8 +194,18 @@ class ArenaRenderer:
         self.show_observation_overlay = not self.show_observation_overlay
         return self.show_observation_overlay
 
-    def draw(self, env: Any) -> pygame.Surface:
-        """Render one frame of `env`. Returns the surface, so headless callers can inspect it."""
+    def toggle_policy_overlay(self) -> bool:
+        """Flip the policy panel and report its new state."""
+        self.show_policy_overlay = not self.show_policy_overlay
+        return self.show_policy_overlay
+
+    def draw(self, env: Any, policy_view: PolicyView | None = None) -> pygame.Surface:
+        """Render one frame of `env`. Returns the surface, so headless callers can inspect it.
+
+        `policy_view` is what the agent's network computed for the observation on screen. It is
+        optional because human play and the render tests have no model behind them; when it is
+        absent the policy panel is simply not drawn.
+        """
         surface = self._ensure_surface()
         dt = self._tick()
         self._pump_events()
@@ -202,9 +224,13 @@ class ArenaRenderer:
             self._draw_bullet(surface, bullet)
         self._draw_player(surface, env.player)
 
+        self._draw_panel_background(surface)
+        panel_y = self.HUD_HEIGHT + 10
         if self.show_observation_overlay:
-            self._draw_observation_overlay(surface, env)
-        self._draw_hud(surface, env)
+            panel_y = self._draw_observation_overlay(surface, env)
+        if self.show_policy_overlay and policy_view is not None:
+            self._draw_policy_panel(surface, policy_view, panel_y)
+        self._draw_hud(surface, env, policy_view)
         if self._banner_remaining > 0.0:
             self._draw_phase_banner(surface)
 
@@ -239,6 +265,8 @@ class ArenaRenderer:
                     self.should_close = True
                 elif event.key in (pygame.K_o, pygame.K_TAB):
                     self.toggle_observation_overlay()
+                elif event.key == pygame.K_v:
+                    self.toggle_policy_overlay()
 
     def _advance_effects(self, env: Any, dt: float) -> None:
         """Latch the one-step phase flag into a wall-clock countdown, and age the pulse timer."""
@@ -320,8 +348,17 @@ class ArenaRenderer:
 
     # --- HUD and overlays -----------------------------------------------------------------------
 
-    def _draw_hud(self, surface: pygame.Surface, env: Any) -> None:
-        """Phase, health, score, step count and the action currently being held."""
+    def _draw_hud(
+        self, surface: pygame.Surface, env: Any, policy_view: PolicyView | None = None
+    ) -> None:
+        """Phase, health, score, step count and the action being taken.
+
+        With a policy view present the ACTION field names the action the panel below is showing the
+        decision for, rather than `env.last_action`, which is the previous step's. The two sat side
+        by side disagreeing by one frame, and a marker reading "ACTION LEFT" beside a highlighted
+        SHOOT bar has been shown a contradiction rather than an explanation. Human play has no view
+        and keeps the env's own answer.
+        """
         pygame.draw.rect(
             surface, COLOR_PANEL, pygame.Rect(0, 0, self.surface_size[0], self.HUD_HEIGHT)
         )
@@ -331,7 +368,7 @@ class ArenaRenderer:
             ("HEALTH", f"{player.health}/{player.max_health}"),
             ("SCORE", f"{env.episode_return:+.2f}"),
             ("STEP", str(env.steps)),
-            ("ACTION", env.action_name),
+            ("ACTION", policy_view.chosen_name if policy_view is not None else env.action_name),
             ("STYLE", env.control_style),
         )
         x = 14
@@ -346,8 +383,12 @@ class ArenaRenderer:
             (self.surface_size[0] - 14 - self.font_small.size(hint)[0], 20),
         )
 
-    def _draw_observation_overlay(self, surface: pygame.Surface, env: Any) -> None:
-        """Draw exactly what the agent sees: its targets, its heading, and the raw feature vector."""
+    def _draw_observation_overlay(self, surface: pygame.Surface, env: Any) -> int:
+        """Draw exactly what the agent sees: its targets, its heading, and the raw feature vector.
+
+        Returns the y coordinate the feature panel finished at, so the policy panel can stack
+        underneath it instead of guessing at a fixed offset.
+        """
         player = env.player
         origin = self.to_screen(player.x, player.y)
 
@@ -374,15 +415,19 @@ class ArenaRenderer:
             ), 2
         )
 
-        self._draw_observation_panel(surface, env)
+        return self._draw_observation_panel(surface, env)
 
-    def _draw_observation_panel(self, surface: pygame.Surface, env: Any) -> None:
-        """The live feature vector, named by `observation.describe()` so labels never drift."""
-        panel_x = ARENA_WIDTH
+    def _draw_panel_background(self, surface: pygame.Surface) -> None:
+        """The side strip both overlays live in. Drawn unconditionally so toggling either one off
+        leaves a panel rather than a hole in the window."""
         pygame.draw.rect(
             surface, COLOR_PANEL,
-            pygame.Rect(panel_x, self.HUD_HEIGHT, self.OVERLAY_PANEL_WIDTH, ARENA_HEIGHT),
+            pygame.Rect(ARENA_WIDTH, self.HUD_HEIGHT, self.OVERLAY_PANEL_WIDTH, ARENA_HEIGHT),
         )
+
+    def _draw_observation_panel(self, surface: pygame.Surface, env: Any) -> int:
+        """The live feature vector, named by `observation.describe()` so labels never drift."""
+        panel_x = ARENA_WIDTH
         y = self.HUD_HEIGHT + 10
         surface.blit(self.font_hud.render("OBSERVATION", True, COLOR_ACCENT), (panel_x + 12, y))
         y += 26
@@ -397,6 +442,52 @@ class ArenaRenderer:
             text = self.font_small.render(f"{float(value):+.2f}", True, COLOR_TEXT)
             surface.blit(text, (panel_x + self.OVERLAY_PANEL_WIDTH - 14 - text.get_width(), y))
             y += 18
+        return y
+
+    def _draw_policy_panel(
+        self, surface: pygame.Surface, view: PolicyView, top: int
+    ) -> None:
+        """What the network computed: a bar per action, and the critic's value for this state.
+
+        This is the Part II answer to "show the algorithm, not just the game". The chosen action is
+        highlighted rather than merely being the longest bar, because under `deterministic=True`
+        the argmax is what actually ran, and on a near-tie the viewer cannot pick it out by eye.
+        """
+        panel_x = ARENA_WIDTH
+        y = top + 14
+        surface.blit(self.font_hud.render("POLICY", True, COLOR_ACCENT), (panel_x + 12, y))
+        y += 24
+        caption = f"{view.algo} · {view.score_label.lower()}"
+        surface.blit(self.font_small.render(caption, True, COLOR_TEXT_DIM), (panel_x + 12, y))
+        y += 20
+
+        track_left = panel_x + 12
+        track_width = self.OVERLAY_PANEL_WIDTH - 24
+        for index, (name, score, bar) in enumerate(
+            zip(view.action_names, view.scores, view.bars, strict=True)
+        ):
+            chosen = index == view.chosen
+            color = COLOR_POLICY_BAR_CHOSEN if chosen else COLOR_POLICY_BAR
+            pygame.draw.rect(
+                surface, COLOR_POLICY_TRACK, pygame.Rect(track_left, y + 12, track_width, 6)
+            )
+            filled = max(0, min(track_width, int(round(track_width * float(bar)))))
+            if filled:
+                pygame.draw.rect(
+                    surface, color, pygame.Rect(track_left, y + 12, filled, 6)
+                )
+            label_color = COLOR_TEXT if chosen else COLOR_TEXT_DIM
+            surface.blit(self.font_small.render(name, True, label_color), (track_left, y))
+            number = self.font_small.render(f"{score:+.2f}", True, label_color)
+            surface.blit(number, (track_left + track_width - number.get_width(), y))
+            y += 26
+
+        if view.value is not None:
+            y += 4
+            surface.blit(self.font_small.render("VALUE V(s)", True, COLOR_TEXT_DIM),
+                         (track_left, y))
+            number = self.font_small.render(f"{view.value:+.2f}", True, COLOR_ACCENT)
+            surface.blit(number, (track_left + track_width - number.get_width(), y))
 
     def _draw_phase_banner(self, surface: pygame.Surface) -> None:
         """A centred banner announcing the new phase, held by the renderer's own countdown."""

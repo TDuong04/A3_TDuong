@@ -33,6 +33,10 @@ sweep:
   # which is roughly two standard deviations. Note how small that spread is next to the gap between
   # configs: at 100k the axes are not separated, which is why the winner is not auto-promoted.
   reward_hack_phase_tolerance: 0.02
+  # Deterministic episodes per model in the promote stage. The tables above rank on
+  # training-time stochastic rollouts; what ships is the deterministic policy, so the promote
+  # decision is measured separately and can disagree with the ranking that produced it.
+  promote_episodes: 30
 
 # Phase 1 must be clearable in roughly 20-30 seconds by a trained agent, because the video rubric
 # requires at least one visible phase progression. Difficulty lives in phases 2+.
@@ -97,3 +101,4 @@ evaluation:
   episodes: 5
   fps: 60
   show_observation_overlay: true  # the debug overlay; doubles as report figure and video moment
+  show_policy_overlay: true       # action probabilities and V(s): the algorithm, on screen

@@ -45,7 +45,7 @@ python -m train.train_gridworld --level 0 --algo q
 python -m train.train_gridworld --level 1 --algo sarsa
 python -m train.train_gridworld --level 1 --compare    # C3: both algorithms, one config,
                                                        # side-by-side policy figure + death rates
-python -m train.train_gridworld --levels 2 3 4 5 --seeds 0 1 2   # D + monsters: order, rates
+python -m train.train_gridworld --levels 0 1 2 3 4 5 --seeds 0 1 2  # D + monsters: order, rates
 python -m train.train_gridworld --level 6 --intrinsic-sweep     # F: intrinsic reward, 0.0 vs 0.5
 python -m eval.play_gridworld --level 0 --algo q       # play a trained policy, arrows overlaid
 python -m eval.play_gridworld --level 4 --algo sarsa   # monsters, stochastic transitions
@@ -55,10 +55,32 @@ python -m eval.play_gridworld --level 1 --compare      # the same contrast anima
 python -m train.train_arena --style direct
 python -m train.train_arena --style rotation
 python -m train.sweep_arena --dry-run                  # J3: the sweep's run plan, no training
-python -m train.sweep_arena                            # J3: explore, confirm on 3 seeds, retrain
+python -m train.sweep_arena                            # J3: explore, confirm on 3 seeds, retrain,
+                                                       # then the deterministic head-to-head
+python -m train.sweep_arena --report-only --promote    # re-measure the head-to-head on the models
+                                                       # already on disk, without retraining
 python -m eval.play_arena --style rotation
+python -m eval.play_arena --style both --no-window     # R6: writes results/arena_eval/
 tensorboard --logdir logs
 ```
+
+## What is visible on screen
+
+Algorithm internals are rendered, not just logged — the project is marked partly from a live demo,
+so anything a marker needs to see has to be in the window.
+
+| Where | Shows |
+|-------|-------|
+| Gridworld HUD | level, steps, return, key held, items collected, speed |
+| Gridworld **Learner** panel | algorithm name, alpha, gamma, the epsilon schedule and the episode budget that trained the policy on screen — read from the run's own summary, never from the config |
+| Gridworld overlays | greedy policy arrows (`P`), per-cell Q-value heatmap (`Q` / `H`) |
+| Arena HUD | phase, health, score, step, current action, control style |
+| Arena **observation** overlay (`O` / `TAB`) | all 21 features live, plus lines to the nearest enemy and spawner and the ship-local heading |
+| Arena **policy** overlay (`V`) | the action probability the network assigned to every action, the one it chose, and the critic's `V(s)` |
+
+In `--compare` mode the two gridworld panels each carry their own Learner block, so "Q-learning and
+SARSA share one exploration schedule" is something a marker reads off the screen rather than takes
+on trust.
 
 ## Layout
 
@@ -71,7 +93,8 @@ train/       training entry points and the TensorBoard callback
 eval/        visual playback scripts (these are what the video records)
 tests/       spec-drift guards
 models/      trained models — REQUIRED NAME, ships in the zip, never gitignored
-logs/        TensorBoard runs — ships in the zip
+logs/        TensorBoard runs — ships in the zip. `ppo_*_shipped/` hold the run.json,
+             monitor CSVs and events for the two models in models/
 results/     training curves, Q-tables, the sweep tables, screenshots for the report
 report/      report source and exported PDF
 ```

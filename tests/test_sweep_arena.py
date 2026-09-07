@@ -20,7 +20,13 @@ import pytest
 
 from common.config import ArenaTrainConfig
 from train import sweep_arena
-from train.sweep_arena import Run, SweepConfig
+from train.sweep_arena import (
+    STAGES,
+    Run,
+    SweepConfig,
+    _head_to_head_section as head_to_head_section,
+    render_report,
+)
 
 
 @pytest.fixture
@@ -322,3 +328,92 @@ def test_the_sweep_never_overwrites_the_canonical_model(
 
     assert incumbent.read_bytes() == b"the model already shipped", "incumbent was overwritten"
     assert (models / "ppo_direct_sweep.zip").exists(), "tuned model saved under its own name"
+
+
+# --- the promote decision -------------------------------------------------------------------------
+
+
+def _metrics(**overrides) -> dict:
+    base = {
+        "style": "direct", "episodes": 30, "seed": 0,
+        "return_mean": 0.0, "return_std": 1.0, "phase_mean": 1.0, "phase_max": 1,
+        "phase_cleared_episodes": 0, "spawners_mean": 0.0, "enemies_mean": 0.0,
+        "steps_mean": 100.0, "survival_rate": 0.0, "returns": [], "phases": [],
+    }
+    return {**base, **overrides}
+
+
+def _comparison(challenger: dict | None, incumbent: dict | None, verdict: str) -> dict:
+    return {
+        "episodes": 30, "style": "direct",
+        "challenger": {"path": "models/ppo_direct_sweep.zip", "metrics": challenger},
+        "incumbent": {"path": "models/ppo_direct.zip", "metrics": incumbent},
+        "promote": verdict == "promote the tuned model", "verdict": verdict,
+    }
+
+
+class TestHeadToHeadReport:
+    """The sweep used to end by *instructing* someone to compare the two models.
+
+    An instruction is not a result. Left that way, the report cites a winner nobody checked — and
+    on this project the check, once run, went the other way.
+    """
+
+    def test_the_section_states_a_verdict(self):
+        section = "\n".join(head_to_head_section(
+            _comparison(_metrics(phase_mean=1.0), _metrics(phase_mean=1.9), "keep the incumbent")
+        ))
+        assert "**Verdict: keep the incumbent.**" in section
+
+    def test_a_negative_result_is_reported_rather_than_hidden(self):
+        """The losing challenger's numbers stay in the table. A sweep that honestly reports a
+        regression is better tuning evidence than one whose winner was never verified."""
+        section = "\n".join(head_to_head_section(
+            _comparison(_metrics(return_mean=-4.16), _metrics(return_mean=17.14),
+                        "keep the incumbent")
+        ))
+        assert "-4.16" in section and "+17.14" in section
+
+    def test_both_roles_appear_with_their_model_paths(self):
+        section = "\n".join(head_to_head_section(
+            _comparison(_metrics(), _metrics(), "keep the incumbent")
+        ))
+        assert "challenger" in section and "incumbent" in section
+        assert "models/ppo_direct_sweep.zip" in section
+        assert "models/ppo_direct.zip" in section
+
+    def test_a_missing_model_is_a_row_not_a_crash(self):
+        """A fresh clone has nothing to promote over."""
+        section = "\n".join(head_to_head_section(
+            _comparison(_metrics(), None, "no incumbent to compare against")
+        ))
+        assert "not on disk" in section
+
+    def test_the_section_says_the_comparison_was_deterministic(self):
+        section = "\n".join(head_to_head_section(
+            _comparison(_metrics(), _metrics(), "keep the incumbent")
+        ))
+        assert "deterministic=True" in section
+
+    def test_the_table_lands_in_the_rendered_report(self):
+        report = {
+            "generated": "2026-09-06T00:00:00", "git_commit": "abc1234",
+            "sweep": {"control_style": "direct", "budget_timesteps": 100000,
+                      "summary_episodes": 100, "reward_hack_phase_tolerance": 0.02,
+                      "confirm_seeds": [0]},
+            "baseline_config": {"algorithm": "PPO"},
+            "explore": [{"label": "baseline", "name": "baseline_s0", "seed": 0,
+                         "metrics": {"phase_reached": 1.0, "ep_rew_mean": -12.0},
+                         "is_baseline": True, "overrides": {}}],
+            "head_to_head": _comparison(_metrics(), _metrics(), "keep the incumbent"),
+        }
+        assert "Promote or not" in render_report(report)
+
+
+class TestPromoteStage:
+    def test_promote_is_a_stage_the_cli_accepts(self):
+        assert STAGES[-1] == "promote"
+
+    def test_the_promote_budget_is_config_driven(self):
+        """No magic number: how many episodes the decision rests on is a tunable."""
+        assert SweepConfig.from_yaml().promote_episodes >= 1

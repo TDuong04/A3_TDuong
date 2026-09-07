@@ -1,0 +1,58 @@
+{
+  "level": 0,
+  "algo": "q",
+  "seed": 2,
+  "episodes": 3000,
+  "alpha": 0.1,
+  "gamma": 0.95,
+  "epsilon_start": 1.0,
+  "epsilon_end": 0.05,
+  "epsilon_decay_episodes": 2000,
+  "max_steps_per_episode": 300,
+  "greedy_steps": 17,
+  "bfs_optimum_steps": 17,
+  "greedy_collected": 3,
+  "n_collectibles": 3,
+  "greedy_return": 3.0,
+  "greedy_died": false,
+  "greedy_truncated": false,
+  "solved": true,
+  "collection_order": [
+    {
+      "tile": "A",
+      "cell": [
+        2,
+        8
+      ],
+      "step": 10
+    },
+    {
+      "tile": "A",
+      "cell": [
+        5,
+        7
+      ],
+      "step": 14
+    },
+    {
+      "tile": "A",
+      "cell": [
+        7,
+        8
+      ],
+      "step": 17
+    }
+  ],
+  "collection_order_text": "A(2,8)@10 -> A(5,7)@14 -> A(7,8)@17",
+  "key_precedes_chest": null,
+  "optimal": true,
+  "stochastic_level": false,
+  "mean_return_last_100": 3.0,
+  "mean_steps_last_100": 18.11,
+  "artifacts": {
+    "history_csv": "results/history_level0_q_seed2.csv",
+    "q_table": "results/qtable_level0_q_seed2.npz",
+    "training_curve": "results/curve_level0_q_seed2.png",
+    "policy_arrows": "results/policy_level0_q_seed2.png"
+  }
+}

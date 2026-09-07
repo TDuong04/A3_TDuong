@@ -13,6 +13,7 @@ measured.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -27,12 +28,19 @@ from eval.play_arena import (  # noqa: E402
     DETERMINISTIC,
     ArenaEvalError,
     evaluate,
+    format_comparison_markdown,
     format_summary,
     human_action,
+    play,
     resolve_model,
+    write_results,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+#: Scratch space for the persistence tests, created and removed per test. `tmp_path` is avoided
+#: for the same reason `test_play_gridworld.py` avoids it: the pytest temp root is unusable here.
+EMPTY_RESULTS = REPO_ROOT / "results" / "__not_a_directory__"
 
 
 # --- evaluation -----------------------------------------------------------------------------------
@@ -133,6 +141,27 @@ class TestHumanControl:
         keys = _Keys(pygame.K_LEFT)
         assert human_action(keys, "direct") != human_action(keys, "rotation")
 
+
+class TestPlayHumanMode:
+    """`play(..., human=True)` used to crash on its very first frame.
+
+    `pygame.key.get_pressed()` needs the video subsystem initialised, and that only happens
+    lazily inside `ArenaRenderer.draw()`. Reading input before the loop's first `draw()` call
+    raises "video system not initialized" on a display that has never been opened — exactly the
+    state a real invocation starts from. `pygame.display.quit()` below resets to that state
+    deliberately, since another test in the session may have already initialised it and hidden
+    the bug.
+    """
+
+    def test_the_first_frame_of_human_play_does_not_crash(self):
+        import pygame
+
+        if pygame.display.get_init():
+            pygame.display.quit()
+        result = play("direct", episodes=1, seed=0, human=True, max_frames=3)
+        assert result["frames"] == 3
+        assert result["human"] is True
+
     def test_every_human_action_is_inside_its_action_space(self):
         import pygame
 
@@ -167,3 +196,66 @@ class _Keys:
 
     def __getitem__(self, key: int) -> bool:
         return key in self.pressed
+
+
+# --- persistence ----------------------------------------------------------------------------------
+
+
+class TestWritingResults:
+    """`evaluate` used to measure everything the report tabulates and then drop it on the floor.
+
+    Numbers that reach a report by hand are how a report ends up disagreeing with its own
+    artifacts, so these tests care about one thing above all: what lands on disk is what was
+    measured, unrounded and unedited.
+    """
+
+    def _stats(self, style: str = "direct") -> dict:
+        return {
+            "style": style, "episodes": 3, "seed": 0,
+            "return_mean": 8.903333, "return_std": 13.4921,
+            "phase_mean": 1.6667, "phase_max": 2, "phase_cleared_episodes": 2,
+            "spawners_mean": 1.6667, "enemies_mean": 14.0, "steps_mean": 760.0,
+            "survival_rate": 0.0, "returns": [1.5, 2.5, 22.7], "phases": [1, 2, 2],
+        }
+
+    def test_one_json_per_style_plus_the_comparison_table(self):
+        directory = EMPTY_RESULTS.parent / "__eval_write_test__"
+        written = write_results([self._stats("direct"), self._stats("rotation")], directory)
+        try:
+            assert set(written) == {"direct", "rotation", "comparison"}
+            assert written["comparison"].name == "comparison.md"
+            assert all(path.exists() for path in written.values())
+        finally:
+            for path in written.values():
+                path.unlink()
+            directory.rmdir()
+
+    def test_the_raw_episode_lists_survive_the_round_trip(self):
+        """Means can be recomputed from these; they cannot be recovered from a mean."""
+        directory = EMPTY_RESULTS.parent / "__eval_round_trip__"
+        stats = self._stats()
+        written = write_results([stats], directory)
+        try:
+            saved = json.loads(written["direct"].read_text())
+            assert saved["returns"] == stats["returns"]
+            assert saved["phases"] == stats["phases"]
+            assert saved["return_mean"] == stats["return_mean"]  # unrounded
+            assert "generated" in saved
+        finally:
+            for path in written.values():
+                path.unlink()
+            directory.rmdir()
+
+    def test_the_comparison_table_names_both_styles_and_the_phase_evidence(self):
+        markdown = format_comparison_markdown(
+            [self._stats("direct"), self._stats("rotation")], "2026-09-06T00:00:00"
+        )
+        assert "`direct`" in markdown and "`rotation`" in markdown
+        assert "Phases cleared" in markdown
+        assert "2/3" in markdown  # the phase progression the video depends on
+        assert "deterministic=True" in markdown
+
+    def test_the_table_reports_the_numbers_it_was_given(self):
+        markdown = format_comparison_markdown([self._stats()], "2026-09-06T00:00:00")
+        assert "+8.90" in markdown
+        assert "1.67" in markdown

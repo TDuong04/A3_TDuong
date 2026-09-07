@@ -26,8 +26,10 @@ rather than key *events* means the two never compete for the same queue.
 from __future__ import annotations
 
 import argparse
+import json
 import statistics
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -35,9 +37,12 @@ import numpy as np
 
 from arena.constants import DirectAction, RotationAction
 from arena.env import ArenaEnv
+from arena.policy_view import probe
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = REPO_ROOT / "models"
+#: Where `--save` writes. The report reads these instead of anyone retyping a terminal scroll.
+RESULTS_DIR = REPO_ROOT / "results" / "arena_eval"
 STYLES = ("direct", "rotation")
 
 #: Evaluation is deterministic. The brief asks for it, and a policy that samples on camera reads as
@@ -163,6 +168,74 @@ def format_summary(stats: dict[str, Any]) -> str:
     )
 
 
+# --- persistence ---------------------------------------------------------------------------
+
+
+def _reportable(path: Path) -> str:
+    """Repo-relative path, so the JSON reads the same on any machine."""
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def write_results(
+    stats: list[dict[str, Any]], results_dir: Path | None = None
+) -> dict[str, Path]:
+    """Persist evaluation numbers to `results/arena_eval/`, returning what was written.
+
+    `evaluate()` measures everything report row R6 tabulates and then used to drop it on the floor:
+    the numbers existed only in a terminal scroll, so every one of them reached the report by hand.
+    Hand-copied numbers are how a report ends up disagreeing with its own artifacts, which is worse
+    than having no table at all. One JSON per style keeps the raw episode lists; the markdown is
+    the comparison table itself, ready to lift.
+    """
+    directory = Path(results_dir) if results_dir is not None else RESULTS_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    generated = datetime.now(UTC).isoformat(timespec="seconds")
+
+    written: dict[str, Path] = {}
+    for entry in stats:
+        path = directory / f"eval_{entry['style']}_seed{entry['seed']}.json"
+        path.write_text(json.dumps({**entry, "generated": generated}, indent=2) + "\n")
+        written[entry["style"]] = path
+
+    table = directory / "comparison.md"
+    table.write_text(format_comparison_markdown(stats, generated))
+    written["comparison"] = table
+    return written
+
+
+def format_comparison_markdown(stats: list[dict[str, Any]], generated: str) -> str:
+    """The control-scheme comparison as a markdown table, in the shape report row R6 wants.
+
+    Ranked by nothing: with two control styles the interesting thing is the pair, not a winner, and
+    sorting a two-row table implies a verdict the seeds may not support.
+    """
+    header = (
+        f"# Arena control-scheme comparison\n\n"
+        f"Generated {generated} by `python -m eval.play_arena --style both --no-window`.\n\n"
+        f"Deterministic policy (`deterministic={DETERMINISTIC}`), both styles evaluated on the "
+        f"same seed sequence so they meet the same arenas.\n\n"
+    )
+    columns = (
+        "| Style | Episodes | Return | Phase reached | Phases cleared | Spawners | Enemies "
+        "| Survival | Steps |\n"
+        "|-------|---------:|-------:|--------------:|---------------:|---------:|--------:"
+        "|---------:|------:|\n"
+    )
+    rows = "".join(
+        f"| `{entry['style']}` | {entry['episodes']} "
+        f"| {entry['return_mean']:+.2f} ± {entry['return_std']:.2f} "
+        f"| {entry['phase_mean']:.2f} (best {entry['phase_max']}) "
+        f"| {entry['phase_cleared_episodes']}/{entry['episodes']} "
+        f"| {entry['spawners_mean']:.2f} | {entry['enemies_mean']:.2f} "
+        f"| {entry['survival_rate']:.0%} | {entry['steps_mean']:.0f} |\n"
+        for entry in stats
+    )
+    return header + columns + rows
+
+
 # --- human control ----------------------------------------------------------------------------
 
 
@@ -234,7 +307,20 @@ def play(
             done = False
             info: dict[str, Any] = {}
             while not done:
-                renderer.draw(env)
+                # Human keys are read after this frame's draw, never before: draw() is what lazily
+                # calls pygame.display.init(), and pygame.key.get_pressed() raises "video system
+                # not initialized" if it runs on a display that has never been opened. The agent
+                # branch has no such dependency, so it probes before stepping — the panel must
+                # describe the observation that produced the action, not the one the step is about
+                # to produce.
+                if human:
+                    view, action = None, None
+                else:
+                    predicted, _ = agent.predict(obs, deterministic=DETERMINISTIC)
+                    action = int(predicted)
+                    view = probe(agent, obs, style, action, algo=algo)
+
+                renderer.draw(env, view)
                 frames += 1
                 if renderer.should_close:
                     raise KeyboardInterrupt
@@ -243,9 +329,7 @@ def play(
 
                 if human:
                     action = human_action(pygame.key.get_pressed(), style)
-                else:
-                    predicted, _ = agent.predict(obs, deterministic=DETERMINISTIC)
-                    action = int(predicted)
+
                 obs, _, terminated, truncated, info = env.step(action)
                 done = terminated or truncated
             renderer.draw(env)  # the final frame: the death or the clock running out
@@ -279,6 +363,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--algo", choices=("ppo", "dqn"), default="ppo")
     parser.add_argument("--no-window", action="store_true",
                         help="skip the window and print the summary only")
+    parser.add_argument("--no-save", action="store_true",
+                        help=f"do not write the evaluation numbers to {_reportable(RESULTS_DIR)}")
+    parser.add_argument("--results-dir", type=Path, default=None,
+                        help="override where the evaluation numbers are written")
     return parser
 
 
@@ -297,16 +385,24 @@ def main(argv: list[str] | None = None) -> int:
         play(args.style, episodes=args.episodes, seed=args.seed, human=True)
         return 0
 
+    measured: list[dict[str, Any]] = []
     try:
         for style in styles:
             if not args.no_window:
                 play(style, episodes=args.episodes, seed=args.seed, algo=args.algo)
             stats = evaluate(style, episodes=args.episodes, seed=args.seed, algo=args.algo)
+            measured.append(stats)
             print()
             print(format_summary(stats))
     except ArenaEvalError as error:
         print(str(error), file=sys.stderr)
         return 1
+
+    if measured and not args.no_save:
+        written = write_results(measured, args.results_dir)
+        print()
+        for name, path in written.items():
+            print(f"wrote {name:<12} {_reportable(path)}")
     return 0
 
 
