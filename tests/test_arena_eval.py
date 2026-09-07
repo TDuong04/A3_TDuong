@@ -28,9 +28,10 @@ from eval.play_arena import (  # noqa: E402
     DETERMINISTIC,
     ArenaEvalError,
     evaluate,
-    format_summary,
     format_comparison_markdown,
+    format_summary,
     human_action,
+    play,
     resolve_model,
     write_results,
 )
@@ -139,6 +140,27 @@ class TestHumanControl:
 
         keys = _Keys(pygame.K_LEFT)
         assert human_action(keys, "direct") != human_action(keys, "rotation")
+
+
+class TestPlayHumanMode:
+    """`play(..., human=True)` used to crash on its very first frame.
+
+    `pygame.key.get_pressed()` needs the video subsystem initialised, and that only happens
+    lazily inside `ArenaRenderer.draw()`. Reading input before the loop's first `draw()` call
+    raises "video system not initialized" on a display that has never been opened — exactly the
+    state a real invocation starts from. `pygame.display.quit()` below resets to that state
+    deliberately, since another test in the session may have already initialised it and hidden
+    the bug.
+    """
+
+    def test_the_first_frame_of_human_play_does_not_crash(self):
+        import pygame
+
+        if pygame.display.get_init():
+            pygame.display.quit()
+        result = play("direct", episodes=1, seed=0, human=True, max_frames=3)
+        assert result["frames"] == 3
+        assert result["human"] is True
 
     def test_every_human_action_is_inside_its_action_space(self):
         import pygame

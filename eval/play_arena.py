@@ -307,21 +307,28 @@ def play(
             done = False
             info: dict[str, Any] = {}
             while not done:
+                # Human keys are read after this frame's draw, never before: draw() is what lazily
+                # calls pygame.display.init(), and pygame.key.get_pressed() raises "video system
+                # not initialized" if it runs on a display that has never been opened. The agent
+                # branch has no such dependency, so it probes before stepping — the panel must
+                # describe the observation that produced the action, not the one the step is about
+                # to produce.
                 if human:
-                    action = human_action(pygame.key.get_pressed(), style)
+                    view, action = None, None
                 else:
                     predicted, _ = agent.predict(obs, deterministic=DETERMINISTIC)
                     action = int(predicted)
+                    view = probe(agent, obs, style, action, algo=algo)
 
-                # Probe before stepping: the panel must describe the observation on screen, which
-                # is the one the action was chosen from, not the one the step is about to produce.
-                view = probe(agent, obs, style, action, algo=algo)
                 renderer.draw(env, view)
                 frames += 1
                 if renderer.should_close:
                     raise KeyboardInterrupt
                 if max_frames is not None and frames >= max_frames:
                     raise KeyboardInterrupt
+
+                if human:
+                    action = human_action(pygame.key.get_pressed(), style)
 
                 obs, _, terminated, truncated, info = env.step(action)
                 done = terminated or truncated
