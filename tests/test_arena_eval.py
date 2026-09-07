@@ -27,10 +27,13 @@ from arena.env import ArenaEnv  # noqa: E402
 from eval.play_arena import (  # noqa: E402
     DETERMINISTIC,
     ArenaEvalError,
+    RandomPolicy,
     evaluate,
     format_comparison_markdown,
     format_summary,
+    has_trained_models,
     human_action,
+    load_policy,
     play,
     resolve_model,
     write_results,
@@ -259,3 +262,198 @@ class TestWritingResults:
         markdown = format_comparison_markdown([self._stats()], "2026-09-06T00:00:00")
         assert "+8.90" in markdown
         assert "1.67" in markdown
+
+
+# --- the random policy ----------------------------------------------------------------------------
+
+
+class TestRandomPolicyFallback:
+    """Running before anything has been trained, without ever pretending chance is a result.
+
+    Two rules that sound like they contradict each other. An *empty* `models/` means nobody has
+    trained anything yet, so the script runs a random policy and says so -- that is what lets the
+    playback loop, the HUD and the overlay be demonstrated while a training run is still going.
+    A *populated* `models/` missing the one style asked for is a different situation entirely: a
+    typo, or a run that died halfway. Falling back to random there would hand back a table that
+    looks exactly like a trained result, so it raises instead.
+    """
+
+    def _dir(self, name: str) -> Path:
+        directory = EMPTY_RESULTS.parent / name
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
+    def test_an_empty_models_directory_runs_a_random_policy(self):
+        directory = self._dir("__models_empty__")
+        try:
+            agent, policy = load_policy("direct", models_dir=directory)
+            assert isinstance(agent, RandomPolicy)
+            assert policy == "random"
+        finally:
+            directory.rmdir()
+
+    def test_the_fallback_names_the_command_that_would_train_one(self, capsys):
+        """Runnable now is not the same as finished; the notice has to point at the next step."""
+        directory = self._dir("__models_empty_notice__")
+        try:
+            load_policy("rotation", models_dir=directory)
+            message = capsys.readouterr().err
+            assert "random policy" in message
+            assert "python -m train.train_arena --style rotation" in message
+        finally:
+            directory.rmdir()
+
+    def test_a_populated_directory_missing_this_style_still_raises(self):
+        """The dangerous case: silently substituting random actions for a model someone expects."""
+        directory = self._dir("__models_half__")
+        stray = directory / "ppo_direct.zip"
+        stray.write_bytes(b"")
+        try:
+            with pytest.raises(ArenaEvalError) as error:
+                load_policy("rotation", models_dir=directory)
+            assert "python -m train.train_arena --style rotation" in str(error.value)
+        finally:
+            stray.unlink()
+            directory.rmdir()
+
+    def test_a_checkpoint_is_not_a_trained_model(self):
+        """`models/checkpoints/` fills up mid-run; a policy still moving is not one to play back."""
+        directory = self._dir("__models_checkpoints__")
+        checkpoints = directory / "checkpoints"
+        checkpoints.mkdir(exist_ok=True)
+        checkpoint = checkpoints / "ppo_direct_50000_steps.zip"
+        checkpoint.write_bytes(b"")
+        try:
+            assert has_trained_models(directory) is False
+        finally:
+            checkpoint.unlink()
+            checkpoints.rmdir()
+            directory.rmdir()
+
+    def test_random_is_forced_even_when_a_model_exists(self):
+        """`--random` is the baseline, not only a fallback: it has to work with models present."""
+        agent, policy = load_policy("direct", models_dir=REPO_ROOT / "models", random=True)
+        assert isinstance(agent, RandomPolicy)
+        assert policy == "random"
+
+    def test_the_random_policy_reproduces_from_its_seed(self):
+        """A baseline nobody can re-derive is not a baseline."""
+
+        def draw(seed: int) -> list[int]:
+            policy = RandomPolicy(6, seed=seed)
+            return [int(policy.predict(None)[0]) for _ in range(20)]
+
+        assert draw(3) == draw(3)
+        assert draw(3) != draw(4)  # ... and it is not a constant wearing a seed
+
+    def test_every_random_action_is_inside_its_action_space(self):
+        for style in ("direct", "rotation"):
+            env = ArenaEnv(control_style=style)
+            policy = RandomPolicy(int(env.action_space.n), seed=0)
+            for _ in range(50):
+                assert env.action_space.contains(int(policy.predict(None)[0]))
+
+    def test_evaluate_labels_the_policy_that_produced_the_numbers(self):
+        stats = evaluate("direct", episodes=1, seed=0, agent=RandomPolicy(6, seed=0))
+        assert stats["policy"] == "random"
+        assert "random" in format_summary(stats)
+
+    def test_an_unnamed_agent_is_labelled_by_its_algorithm(self):
+        stats = evaluate("direct", episodes=1, seed=0, agent=_ScriptedAgent(DirectAction.NOOP))
+        assert stats["policy"] == "ppo"
+
+
+class TestRandomRunsStayOffTheTrainedTables:
+    """`comparison.md` is what report row R6 cites. Chance-level numbers must never reach it."""
+
+    def _stats(self, style: str, policy: str) -> dict:
+        return {
+            "style": style, "policy": policy, "episodes": 2, "seed": 0,
+            "return_mean": -13.3, "return_std": 0.73, "phase_mean": 1.0, "phase_max": 1,
+            "phase_cleared_episodes": 0, "spawners_mean": 0.0, "enemies_mean": 1.0,
+            "steps_mean": 180.0, "survival_rate": 0.0, "returns": [-13.0, -13.6],
+            "phases": [1, 1],
+        }
+
+    def test_a_random_run_writes_its_own_files(self):
+        directory = EMPTY_RESULTS.parent / "__eval_random_write__"
+        written = write_results([self._stats("direct", "random")], directory)
+        try:
+            assert written["comparison"].name == "comparison_random.md"
+            assert written["direct"].name == "eval_random_direct_seed0.json"
+            assert not (directory / "comparison.md").exists()
+        finally:
+            for path in written.values():
+                path.unlink()
+            directory.rmdir()
+
+    def test_a_trained_run_keeps_the_filenames_the_report_cites(self):
+        directory = EMPTY_RESULTS.parent / "__eval_trained_write__"
+        written = write_results([self._stats("direct", "ppo")], directory)
+        try:
+            assert written["comparison"].name == "comparison.md"
+            assert written["direct"].name == "eval_direct_seed0.json"
+        finally:
+            for path in written.values():
+                path.unlink()
+            directory.rmdir()
+
+    def test_the_random_table_says_on_its_face_that_it_is_a_baseline(self):
+        """The table gets screenshotted into a report; it has to carry its own provenance."""
+        markdown = format_comparison_markdown(
+            [self._stats("direct", "random")], "2026-09-07T00:00:00"
+        )
+        assert "not a trained result" in markdown
+        assert "`random`" in markdown
+        assert "deterministic=True" not in markdown
+
+    def test_the_trained_table_still_reports_its_policy(self):
+        markdown = format_comparison_markdown(
+            [self._stats("direct", "ppo")], "2026-09-07T00:00:00"
+        )
+        assert "`ppo`" in markdown
+        assert "deterministic=True" in markdown
+
+
+# --- the render and input paths are read-only -----------------------------------------------------
+
+
+class TestRenderAndInputPathsAreReadOnly:
+    """Playback must observe the simulation, never steer it.
+
+    `tests/test_arena_render.py` proves one frame of `draw()` mutates nothing. This is the same
+    guarantee at the level the playback script actually runs at: a whole seeded episode, window and
+    all. If any part of the render or input path wrote back into the env -- a cached observation
+    rebuilt from a moved world, an event pump consuming a step, an overlay nudging an entity -- the
+    two runs below would diverge, and the video would be showing something other than what the
+    evaluation table reports.
+    """
+
+    def test_drawing_a_window_does_not_change_the_trajectory(self):
+        drawn = play("direct", episodes=3, seed=0, headless=True, random_policy=True)
+        undrawn = evaluate("direct", episodes=3, seed=0, random_policy=True)
+        assert drawn["returns"] == undrawn["returns"]
+        assert drawn["phases"] == undrawn["phases"]
+
+    def test_reading_the_keyboard_does_not_touch_the_simulation(self):
+        import pygame
+
+        env = ArenaEnv(control_style="direct")
+        env.step(int(DirectAction.SHOOT))
+
+        def snapshot() -> tuple:
+            return (
+                env.player.x, env.player.y, env.player.vx, env.player.vy,
+                env.player.heading, env.player.health,
+                tuple((e.x, e.y, e.health) for e in env.enemies),
+                tuple((s.x, s.y, s.health) for s in env.spawners),
+                tuple((b.x, b.y) for b in env.bullets),
+                env.phase, env.steps, env.episode_return, env.last_action,
+            )
+
+        before = snapshot()
+        for keys in (_Keys(), _Keys(pygame.K_UP), _Keys(pygame.K_SPACE),
+                     _Keys(pygame.K_LEFT, pygame.K_SPACE)):
+            human_action(keys, "direct")
+            human_action(keys, "rotation")
+        assert snapshot() == before

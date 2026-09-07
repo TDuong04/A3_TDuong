@@ -77,6 +77,8 @@ python -m train.sweep_arena --report-only --promote    # re-measure the head-to-
 # Part II — playback
 python -m eval.play_arena --style rotation
 python -m eval.play_arena --style direct --human       # G: play the same env from the keyboard
+python -m eval.play_arena --style direct --random      # the chance-level baseline; also what runs
+                                                       # by itself when models/ is still empty
 python -m eval.play_arena --style both --no-window     # R6: writes results/arena_eval/
 tensorboard --logdir logs
 ```
@@ -142,6 +144,7 @@ cite these in the report rather than re-deriving numbers by hand.
 | [`results/intrinsic_level6_q.md`](results/intrinsic_level6_q.md)           | row F: the count-based bonus swept over five strengths and five seeds — an honest negative result                                             |
 | [`results/arena_sweep/sweep_table.md`](results/arena_sweep/sweep_table.md) | row J3: the hyperparameter sweep, one axis at a time, confirmed across seeds, with a reward-hacking flag                                      |
 | [`results/arena_eval/comparison.md`](results/arena_eval/comparison.md)     | row I: the two control schemes measured head-to-head on the same seeded arenas                                                                |
+| [`results/arena_eval/comparison_random.md`](results/arena_eval/comparison_random.md) | row I: the same 30 seeded arenas under a uniform random policy — the baseline that makes "clears 29 of 30" mean something                       |
 | [`docs/evaluations/`](docs/evaluations/)                                   | dated whole-project audits against the rubric, each pinned to the commit it measured                                                          |
 
 `results/` also holds the training curves, policy figures, per-run summaries, episode histories and
