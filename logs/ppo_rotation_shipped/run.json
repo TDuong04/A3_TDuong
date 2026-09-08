@@ -1,0 +1,24 @@
+{
+  "control_style": "rotation",
+  "policy": "MlpPolicy",
+  "started": "2026-09-06T18:23:06",
+  "git_commit": "66316d1",
+  "algorithm": "PPO",
+  "total_timesteps": 400000,
+  "n_envs": 8,
+  "learning_rate": 0.0003,
+  "n_steps": 2048,
+  "batch_size": 512,
+  "gamma": 0.99,
+  "ent_coef": 0.005,
+  "net_arch": [
+    64,
+    64
+  ],
+  "seed": 0,
+  "run_name": "ppo_rotation_shipped",
+  "model_path": "models/ppo_rotation.zip",
+  "ignored_hyperparameters": [],
+  "finished": "2026-09-06T18:23:06",
+  "wall_clock_seconds": 29.3
+}

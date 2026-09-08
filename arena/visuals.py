@@ -13,7 +13,7 @@ import pygame
 
 from common.config import load_yaml
 
-from .observation import describe, nearest_alive
+from .observation import describe
 
 if TYPE_CHECKING:
     from .env import ArenaEnv
@@ -165,48 +165,31 @@ class PerceptionOverlay:
             self._font = pygame.font.Font(None, 20)
         surface.blit(self._font.render(text, True, color), position)
 
-    def draw_world(self, surface, env):
-        p = env.player
-        for candidates, color in ((env.enemies, ENEMY_LINK), (env.spawners, SPAWNER_LINK)):
-            target = nearest_alive(p, candidates)
-            if target is not None:
-                pygame.draw.line(surface, color, p.position, target.position, width=1)
-                pygame.draw.circle(surface, color, target.position, target.radius + 5, width=1)
-        for tip, color, label in zip(self.axes(p), (FORWARD, LATERAL), ('+x', '+y'), strict=True):
-            pygame.draw.line(surface, color, p.position, tip, width=2)
-            self._label(surface, label, tip, color)
-
-    def draw_panel(self, surface, env):
+    def draw_compass(self, surface, env):
+        """Compact ship-relative view; existing HUD and full feature panel stay visible."""
         values = self.values(env)
-        pygame.draw.rect(surface, PANEL, (12, 12, 324, 300), border_radius=8)
-        self._label(surface, 'PILOT PERCEPTION   [O] hide', (24, 23), FORWARD)
-        self._label(surface, 'Actual agent input / normalized [-1, 1]', (24, 45))
-        center, radius = (90, 136), 56
+        x, y = 12, surface.get_height() - 152
+        pygame.draw.rect(surface, PANEL, (x, y, 234, 140), border_radius=8)
+        self._label(surface, 'PILOT PERCEPTION  [O]', (x + 10, y + 8), FORWARD)
+        center, radius = (x + 58, y + 80), 40
         pygame.draw.circle(surface, (82, 100, 123), center, radius, width=1)
-        pygame.draw.line(surface, FORWARD, (34, 136), (146, 136))
-        pygame.draw.line(surface, LATERAL, (90, 80), (90, 192))
-        self._label(surface, '+x forward', (155, 116), FORWARD)
-        self._label(surface, '+y lateral', (155, 139), LATERAL)
-        self._label(surface, 'Ring = arena diagonal', (155, 164))
+        pygame.draw.line(surface, FORWARD, (center[0] - radius, center[1]),
+                         (center[0] + radius, center[1]))
+        pygame.draw.line(surface, LATERAL, (center[0], center[1] - radius),
+                         (center[0], center[1] + radius))
+        self._label(surface, '+x forward', (x + 110, y + 38), FORWARD)
+        self._label(surface, '+y lateral', (x + 110, y + 58), LATERAL)
         markers = []
-        for prefix, color in (('spawner', SPAWNER_LINK), ('enemy', ENEMY_LINK)):
-            if values[f'{prefix}_exists']:
+        for row, (prefix, color) in enumerate((('spawner', SPAWNER_LINK), ('enemy', ENEMY_LINK))):
+            exists = values[f'{prefix}_exists']
+            self._label(surface, prefix if exists else prefix + ': none',
+                        (x + 110, y + 82 + row * 20), color)
+            if exists:
                 point = (center[0] + radius * values[f'{prefix}_local_dx'],
                          center[1] + radius * values[f'{prefix}_local_dy'])
                 pygame.draw.line(surface, color, center, point, width=2)
                 markers.append((prefix, color, point))
-        # Draw markers after all rays: a farther target's ray must not hide a nearer one.
         for prefix, color, point in markers:
             pygame.draw.circle(surface, color, point, 6 if prefix == 'spawner' else 3,
                                width=1 if prefix == 'spawner' else 0)
-        for row, (prefix, color) in enumerate((('enemy', ENEMY_LINK), ('spawner', SPAWNER_LINK))):
-            if values[f'{prefix}_exists']:
-                label = (f"{prefix}: x {values[f'{prefix}_local_dx']:+.2f}  "
-                         f"y {values[f'{prefix}_local_dy']:+.2f}  "
-                         f"d {values[f'{prefix}_distance']:.2f}")
-            else:
-                label = f'{prefix}: none  /  x 0.00  y 0.00  d 0.00'
-            self._label(surface, label, (24, 205 + row * 23), color)
-        self._label(surface, f"health {values['health']:.2f}   cooldown {values['shoot_cooldown']:.2f}",
-                    (24, 255))
-        self._label(surface, 'Same perception for both control styles', (24, 281))
+        self._label(surface, 'Ring = arena diagonal', (x + 10, y + 120))

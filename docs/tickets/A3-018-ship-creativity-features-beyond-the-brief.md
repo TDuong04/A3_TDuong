@@ -12,7 +12,7 @@ owner: unassigned
 blocks: []
 blocked_by: [A3-009]
 created: 2026-08-19
-updated: 2026-09-05
+updated: 2026-09-08
 ---
 
 # A3-018 — Ship creativity features beyond the brief
@@ -42,4 +42,5 @@ Purely visual effects must never touch simulation state, or evaluation stops mat
 
 - 2026-08-19 — created during project setup
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/18
-- 2026-09-05 — Implemented three cohesive groups: perception overlay with an original ship-local compass, keyboard play on ArenaEnv, and renderer-owned combat feedback. Missing overlay and human-play prerequisites were completed here; A3-022 HUD/phase banners and the remaining A3-012 trained-policy work stay open. See docs/arena-creativity.md for controls, design, and originality rationale. Verified 621 passing tests, including simulation and RNG invariance in both styles, and inspected offscreen renders; no desktop keyboard session was performed.
+- 2026-09-08 — Integrated creativity features with completed A3-009/A3-012 on main: retain HUD, phase, observation, policy and trained/human playback; add renderer-owned combat feedback and pilot-perception compass. See docs/arena-creativity.md for integration differences, controls and originality rationale.
+- 2026-09-08 — Verification: 65 focused and 721 full-suite tests passed; both shipped PPO models reached phase 2 at seed 0; offscreen playback inspected for both styles. Desktop keyboard testing remains manual.

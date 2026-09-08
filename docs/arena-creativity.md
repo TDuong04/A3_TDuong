@@ -1,74 +1,69 @@
-# Arena creativity features (A3-018)
+# A3-018 integrated with main
 
-Three cohesive feature groups satisfy the ticket: perception, human control, and
-combat feedback. The existing A3-021 renderer is reused. The missing A3-023 overlay
-and the human-play portion of A3-012 are implemented here. A3-022's broader HUD,
-health bars and phase banners, and A3-012's trained-model playback remain separate.
+Integration base: `bf75cfc` (main fetched on 2026-09-08). The older A3-018 branch
+replaced an unfinished renderer/evaluation stub; it must not be copied over the
+completed A3-009 and A3-012 implementation now on main.
 
-## Demo
+| Area | Integration decision |
+| --- | --- |
+| Renderer | Keep main's coordinate mapping, HUD, health bars, phase banners and window lifecycle. |
+| Observation | Keep O/TAB and the full 21-feature panel; add a compact pilot-perception compass. |
+| Policy | Keep V, action probabilities/Q-values, chosen action and critic value. |
+| Human/evaluation | Reuse main's keyboard mapping, seeded episodes, trained model loading and result export. |
+| Combat | Reuse A3-018's bounded renderer-owned flashes, hit rings, particles and shake. E toggles these added effects. |
 
-From the repository root with requirements installed:
+No simulation, physics, reward, observation, training configuration, saved model or
+result artifact is modified. Main's existing invulnerability flicker remains active
+when E disables the added combat effects. The older separate `arena.play` application
+is not needed; use the existing evaluation entry point for both humans and agents.
+
+## Run
+
+From the repository root, with requirements installed:
 
 ```sh
 python -m eval.play_arena --human --style direct --seed 0
 python -m eval.play_arena --human --style rotation --seed 0
-python -m arena.render --style direct --seed 0
-python -m arena.render --style rotation --seed 0 --headless --frames 1200
+python -m eval.play_arena --style direct --episodes 1 --no-save
+python -m eval.play_arena --style rotation --episodes 1 --no-save
+python -m eval.play_arena --style both --episodes 1 --no-window --no-save
 ```
 
-The renderer command defaults to a scripted demonstration, not a trained policy.
-The evaluation entry point currently requires `--human`.
+WASD/arrows move in direct mode; W/up thrusts and A/D or left/right turn in rotation
+mode. Space shoots and takes priority. Main's rotation input priority remains
+shoot, left, right, thrust. O/TAB toggles observation plus compass, V toggles policy,
+E toggles added effects, and Escape exits. Episodes restart through the existing
+seeded evaluation loop. The earlier A3-018 P/R controls and `arena.render` CLI do
+not apply to this integration.
 
-| Control | Action |
-| --- | --- |
-| WASD / arrows, direct | Move and face that direction |
-| W / up, rotation | Thrust |
-| A/D / left/right, rotation | Turn |
-| Space | Shoot; takes priority over movement |
-| O | Toggle perception overlay |
-| E | Toggle all combat effects |
-| P | Pause/resume |
-| R | Reset to the selected seed; retains pause setting |
-| Escape | Exit |
+## Originality and visual isolation
 
-Human play sends exactly one discrete action to `ArenaEnv.step()` per training
-decision interval. Simultaneous movement keys use up/down/left/right priority in
-direct mode and thrust/left/right priority in rotation mode. There is no mouse aim.
-Losing window focus pauses and clears held keys. An ended human episode waits for R.
+Report-ready sentence: “Our pilot-perception compass connects world-space target
+links to the agent's actual normalized ship-relative inputs, allowing human
+choices to be compared with the same perception in both control styles.”
 
-## Perception and originality
+The compass uses feature names from `describe()` and values from `env.observation()`;
+local +x is right (forward) and +y is down (clockwise lateral). The circle radius
+represents the arena diagonal. Enemy dots and outlined spawner markers disappear
+when no living target exists. O hides the compass if it obstructs the playfield.
 
-O starts with `evaluation.show_observation_overlay` from `config/arena.yaml`.
-World links select the nearest living enemy and spawner using observation helpers;
-cyan +x follows the ship nose and green +y points clockwise on screen.
+`arena/visuals.py` reads entity changes after steps. Repeated draws do not duplicate
+events, resets clear old effects, event storage is capped, and particles use fixed
+radial geometry without RNG. Main's renderer clock advances visual ages. Drawing
+uses an arena-coordinate subsurface below the HUD; shake is clipped to that field.
+The HUD, observation/policy panels, compass and phase banner remain stationary.
+The first sample establishes a baseline; events before sampling cannot be recovered.
+Durations and limits are in the renderer-only `visual_feedback` YAML block.
 
-The **pilot-perception compass** plots actual normalized target offsets from
-`env.observation()`, keyed by `describe()`. Its radius represents one arena diagonal,
-with local +x right and +y down. Enemy dots and outlined spawner circles distinguish
-target types. Missing targets show zero values without retaining old markers.
+## Verification
 
-Report-ready sentence: “Our original pilot-perception compass connects world-space
-target links to the agent's actual normalized ship-relative inputs, letting a human
-pilot compare their decisions with the same perception under both control styles.”
+65 focused tests and all 721 tests in the full pytest suite passed. Training tests
+require multiprocessing sockets outside the workspace sandbox. One seeded headless
+evaluation with each shipped PPO model reached phase 2 (seed 0).
 
-## Visual isolation and verification
-
-`arena/visuals.py` stores bounded muzzle flashes, pulsing hit rings, radial explosion
-particles and damped screen shake. `arena/render.py` owns this state; the panel stays
-fixed while the world shakes. Durations and limits live in `visual_feedback` YAML.
-Effects use deterministic geometry and no random stream. `arena/play.py` handles
-keys, pacing, and sampling after every environment step, including multiple steps
-in one display frame. Simulation, rewards, observations and environment APIs are unchanged.
-
-For a custom loop, call `renderer.observe(env)` after each step and
-`renderer.advance(elapsed_seconds)` once per visual update, then `renderer.draw(env)`.
-Drawing also samples state; repeated draws do not duplicate events. The initial
-sample establishes a baseline, and resets or effect toggles clear old feedback.
-Effects cannot reconstruct events that occurred before sampling began.
-
-Validation: 104 focused tests and the full 621-test pytest suite passed. Checks
-compare complete environment state and returned observations/rewards between visual
-and nonvisual trajectories, including environment and global Python/NumPy RNG state.
-Offscreen overlay and combat frames were visually inspected; CLI runs and synthetic
-keyboard events cover both styles. A physical keyboard/desktop play session was
-not performed.
+Focused tests cover real combat in both styles, complete simulation and RNG
+invariance, reset/toggle cleanup, compass alignment at nonzero headings, missing
+and coincident targets, and stationary HUD/panels during shake. Existing renderer,
+policy and human/evaluation tests remain unchanged. Actual saved PPO models were
+loaded for 120 rendered steps per style and the resulting images inspected.
+Physical keyboard play in a desktop window was not performed.

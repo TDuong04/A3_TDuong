@@ -1,216 +1,250 @@
-"""A3-021: actual entity pixels, display ownership, and simulation isolation."""
+"""Headless tests for `arena.render` — rubric row G's visual half.
+
+Pygame normally needs a display, which a CI box and a marker's laptop may not have. Every test here
+runs under `SDL_VIDEODRIVER=dummy` (set below, before pygame touches the video subsystem) and draws
+to an off-screen `pygame.Surface` via `ArenaRenderer(headless=True)`, so the whole renderer is
+exercised without a window ever opening — the same arrangement `test_gridworld_render.py` uses.
+
+What these tests can and cannot do: they read the pixels the renderer actually produced, so they
+prove each entity type reaches the screen in its own colour and that the overlay and banner appear
+only when they should. They cannot prove the picture is *pretty* — that is ten minutes of watching
+`eval/play_arena.py` by hand.
+
+The load-bearing test is `test_drawing_never_mutates_the_simulation`: an effect that wrote back into
+the env would make evaluation stop matching training, and the drift would look like a training bug
+for as long as it took to find.
+"""
+
 from __future__ import annotations
 
-import math
 import os
-import pickle
-import subprocess
-import sys
-from pathlib import Path
+from typing import Any
 
 import numpy as np
-import pygame
 import pytest
 
-from arena.constants import ARENA_HEIGHT, ARENA_WIDTH, CONTROL_STYLES
-from arena.entities import Bullet, Enemy, Spawner
-from arena.env import ArenaEnv
-from arena.render import (
-    COLOR_BACKGROUND,
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+
+import pygame  # noqa: E402  (must follow the driver assignment above)
+
+from arena.constants import ARENA_HEIGHT, ARENA_WIDTH, DirectAction  # noqa: E402
+from arena.entities import Enemy  # noqa: E402
+from arena.env import ArenaEnv  # noqa: E402
+from arena.observation import describe  # noqa: E402
+from arena.render import (  # noqa: E402
+    BANNER_SECONDS,
     COLOR_BULLET,
     COLOR_ENEMY,
+    COLOR_OVERLAY_HEADING,
     COLOR_PLAYER,
-    COLOR_PLAYER_DEAD,
     COLOR_SPAWNER,
+    ArenaRenderConfig,
     ArenaRenderer,
-    scripted_action,
 )
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
-def scene():
-    env = ArenaEnv(seed=0)
-    env.player.x, env.player.y, env.player.heading = 480.0, 340.0, 0.0
-    env.enemies = [Enemy(200, 200, health=1, speed=90)]
-    env.spawners = [Spawner(700, 450, env.phase_settings)]
-    env.bullets = [Bullet(350, 200, heading=0, speed=520)]
-    return env
+def env() -> ArenaEnv:
+    world = ArenaEnv("direct")
+    world.reset(seed=0)
+    return world
 
 
-def rgb(surface, position):
-    return tuple(surface.get_at(position)[:3])
+@pytest.fixture
+def renderer() -> ArenaRenderer:
+    return ArenaRenderer(headless=True)
 
 
-def test_entities_have_distinct_shapes_at_their_world_positions(scene):
-    renderer = ArenaRenderer(headless=True, show_observation_overlay=False, effects=False)
-    surface = renderer.draw(scene)
-    assert surface.get_size() == (ARENA_WIDTH, ARENA_HEIGHT)
-    assert rgb(surface, (480, 340)) == COLOR_PLAYER
-    assert rgb(surface, (200, 200)) == COLOR_ENEMY
-    assert rgb(surface, (700, 450)) == COLOR_SPAWNER
-    assert rgb(surface, (350, 200)) == COLOR_BULLET
-    assert rgb(surface, (100, 100)) == COLOR_BACKGROUND
-    # Circle corners stay empty, whereas square corners are filled.
-    assert rgb(surface, (210, 210)) == COLOR_BACKGROUND
-    assert rgb(surface, (715, 465)) == COLOR_SPAWNER
-    assert rgb(surface, (344, 200)) == COLOR_BULLET
-    assert rgb(surface, (350, 206)) == COLOR_BACKGROUND
-    renderer.close()
+def pixels(surface: pygame.Surface) -> np.ndarray:
+    """The surface as an (H, W, 3) array, so a colour can be counted across the whole frame."""
+    return pygame.surfarray.array3d(surface).transpose(1, 0, 2)
 
 
-@pytest.mark.parametrize('heading, nose, behind', [
-    (0, (492, 340), (468, 340)),
-    (math.pi / 2, (480, 352), (480, 328)),
-    (math.pi, (468, 340), (492, 340)),
-    (-math.pi / 2, (480, 328), (480, 352)),
-    (math.pi / 4, (488, 348), (472, 332)),
-])
-def test_ship_nose_follows_heading(scene, heading, nose, behind):
-    scene.player.heading = heading
-    renderer = ArenaRenderer(headless=True, show_observation_overlay=False, effects=False)
-    surface = renderer.draw(scene)
-    assert rgb(surface, nose) == COLOR_PLAYER
-    assert rgb(surface, behind) == COLOR_BACKGROUND
-    renderer.close()
+def count_color(surface: pygame.Surface, color: tuple[int, int, int]) -> int:
+    return int((pixels(surface) == np.array(color, dtype=np.uint8)).all(axis=2).sum())
 
 
-def test_new_frame_clears_old_positions_and_dead_entities(scene):
-    renderer = ArenaRenderer(headless=True, show_observation_overlay=False, effects=False)
-    renderer.draw(scene)
-    scene.enemies[0].x = 250
-    scene.spawners[0].kill()
-    scene.bullets[0].kill()
-    scene.player.kill()
-    surface = renderer.draw(scene)
-    assert rgb(surface, (200, 200)) == COLOR_BACKGROUND
-    assert rgb(surface, (250, 200)) == COLOR_ENEMY
-    assert rgb(surface, (700, 450)) == COLOR_BACKGROUND
-    assert rgb(surface, (350, 200)) == COLOR_BACKGROUND
-    assert rgb(surface, (480, 340)) == COLOR_PLAYER_DEAD
-    scene.enemies.clear()
-    scene.spawners.clear()
-    scene.bullets.clear()
-    assert rgb(renderer.draw(scene), (250, 200)) == COLOR_BACKGROUND
-    renderer.close()
+class RecordingFont:
+    """Wraps a `pygame.font.Font` and records every string it is asked to render.
+
+    A proxy rather than a monkeypatch because `Font.render` is a read-only attribute; everything
+    the renderer calls on a font is delegated through `__getattr__`.
+    """
+
+    def __init__(self, font: pygame.font.Font) -> None:
+        self.font = font
+        self.drawn: list[str] = []
+
+    def render(self, text: str, *args: Any, **kwargs: Any) -> pygame.Surface:
+        self.drawn.append(text)
+        return self.font.render(text, *args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.font, name)
 
 
-def test_bullet_heading_changes_its_visible_direction(scene):
-    renderer = ArenaRenderer(headless=True, show_observation_overlay=False, effects=False)
-    scene.bullets[0].heading = math.pi / 2
-    surface = renderer.draw(scene)
-    assert rgb(surface, (350, 194)) == COLOR_BULLET
-    assert rgb(surface, (344, 200)) == COLOR_BACKGROUND
-    renderer.close()
+# --- surface and configuration ------------------------------------------------------------------
 
 
-def test_drawing_preserves_all_environment_entity_and_rng_state(scene):
-    renderer = ArenaRenderer(headless=True, show_observation_overlay=False, effects=False)
-    before = pickle.dumps(scene.__dict__)
-    for _ in range(5):
-        renderer.draw(scene)
-    assert pickle.dumps(scene.__dict__) == before
-    renderer.close()
+def test_headless_renderer_opens_no_display(env, renderer):
+    renderer.draw(env)
+    assert not pygame.display.get_init()
 
 
-@pytest.mark.parametrize('style', CONTROL_STYLES)
-def test_rendering_does_not_change_a_seeded_trajectory(style):
-    env = ArenaEnv(control_style=style, seed=7)
-    reference = ArenaEnv(control_style=style, seed=7)
-    renderer = ArenaRenderer(headless=True, show_observation_overlay=False, effects=False)
-    for step in range(180):
-        action = step % int(env.action_space.n)
-        actual = env.step(action)
-        expected = reference.step(action)
+def test_surface_is_the_arena_plus_hud_and_panel(renderer):
+    width, height = renderer.surface_size
+    assert width == ARENA_WIDTH + renderer.OVERLAY_PANEL_WIDTH
+    assert height == ARENA_HEIGHT + renderer.HUD_HEIGHT
+
+
+def test_playfield_coordinates_sit_below_the_hud(renderer):
+    assert renderer.to_screen(0.0, 0.0) == (0, renderer.HUD_HEIGHT)
+    assert renderer.to_screen(10.0, 20.0) == (10, 20 + renderer.HUD_HEIGHT)
+
+
+def test_render_config_comes_from_the_yaml():
+    from common.config import load_yaml
+
+    block = load_yaml("arena")["evaluation"]
+    config = ArenaRenderConfig.from_yaml()
+    assert config.fps == block["fps"]
+    assert config.show_observation_overlay == block["show_observation_overlay"]
+
+
+# --- entities reach the screen --------------------------------------------------------------------
+
+
+def test_every_entity_type_is_drawn_in_its_own_colour(env, renderer):
+    env.enemies.append(Enemy(env.player.x + 90.0, env.player.y, health=1, speed=90.0))
+    env.step(int(DirectAction.SHOOT))
+    surface = renderer.draw(env)
+
+    assert count_color(surface, COLOR_PLAYER) > 0, "ship missing"
+    assert count_color(surface, COLOR_ENEMY) > 0, "enemy missing"
+    assert count_color(surface, COLOR_SPAWNER) > 0, "spawner missing"
+    assert count_color(surface, COLOR_BULLET) > 0, "bullet missing"
+
+
+def test_the_ship_is_a_triangle_pointing_along_its_heading(renderer, env):
+    env.player.heading = 0.0
+    points = renderer._ship_points(env.player)
+    assert len(points) == 3
+    nose = points[0]
+    # The nose leads on +x when the heading is 0, and reaches further than the rear corners do.
+    assert nose[0] > points[1][0] and nose[0] > points[2][0]
+
+
+def test_a_destroyed_player_is_not_drawn(env, renderer):
+    baseline = count_color(renderer.draw(env), COLOR_PLAYER)
+    assert baseline > 0
+    env.player.kill()
+    assert count_color(renderer.draw(env), COLOR_PLAYER) == 0
+
+
+# --- overlays and the HUD ---------------------------------------------------------------------------
+
+
+def test_observation_overlay_toggles(env, renderer):
+    renderer.show_observation_overlay = True
+    with_overlay = count_color(renderer.draw(env), COLOR_OVERLAY_HEADING)
+    assert renderer.toggle_observation_overlay() is False
+    without = count_color(renderer.draw(env), COLOR_OVERLAY_HEADING)
+    assert with_overlay > 0 and without == 0
+    assert renderer.toggle_observation_overlay() is True
+
+
+def test_the_overlay_panel_is_driven_by_describe(env, renderer):
+    """Labels are read from `observation.describe()`, so they cannot drift from the layout."""
+    renderer.show_observation_overlay = True
+    font = RecordingFont(renderer.font_small)
+    renderer.font_small = font
+    renderer.draw(env)
+    assert set(describe()).issubset(set(font.drawn))
+
+
+def test_hud_reports_the_quantities_the_rubric_asks_to_see(env, renderer):
+    env.step(int(DirectAction.RIGHT))
+    renderer.font_small = RecordingFont(renderer.font_small)
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer.draw(env)
+
+    drawn = renderer.font_small.drawn + renderer.font_hud.drawn
+    for label in ("PHASE", "HEALTH", "SCORE", "STEP", "ACTION"):
+        assert label in drawn
+    assert env.action_name in drawn
+    assert str(env.steps) in drawn
+
+
+def test_the_hud_prints_the_phase_number_the_env_is_actually_in(env, renderer):
+    """The value, not just the label. `env.phase` is 1-based, so a renderer that adds one prints
+    PHASE 2 over the first phase and PHASE 3 on the first banner -- wrong in exactly the
+    phase-progression shot the video rubric asks for, and invisible to a test that only checks the
+    word "PHASE" was drawn somewhere."""
+    assert env.phase == 1
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer.draw(env)
+    assert "1" in renderer.font_hud.drawn
+    assert "2" not in renderer.font_hud.drawn
+
+    for spawner in env.spawners:
+        spawner.take_damage(spawner.health)
+    env.step(int(DirectAction.NOOP))
+    assert env.phase == 2
+
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.draw(env)
+    assert "2" in renderer.font_hud.drawn
+    assert "PHASE 2" in renderer.font_banner.drawn, renderer.font_banner.drawn
+
+
+def test_phase_banner_latches_for_its_own_countdown(env, renderer):
+    """`phase_just_advanced` is true for one step; the banner must outlive it on screen."""
+    for spawner in env.spawners:
+        spawner.take_damage(spawner.health)
+    env.step(int(DirectAction.NOOP))
+    assert env.phase_just_advanced
+
+    renderer.draw(env)
+    assert renderer._banner_remaining == pytest.approx(BANNER_SECONDS)
+
+    env.step(int(DirectAction.NOOP))
+    assert not env.phase_just_advanced
+    renderer.draw(env)
+    assert 0.0 < renderer._banner_remaining < BANNER_SECONDS
+
+
+# --- the load-bearing guarantee ----------------------------------------------------------------------
+
+
+def test_drawing_never_mutates_the_simulation(env, renderer):
+    """Every effect in the renderer is cosmetic, or evaluation stops matching training."""
+    env.enemies.append(Enemy(env.player.x + 60.0, env.player.y, health=2, speed=90.0))
+    env.step(int(DirectAction.SHOOT))
+
+    def snapshot() -> tuple:
+        return (
+            env.player.x, env.player.y, env.player.vx, env.player.vy,
+            env.player.heading, env.player.health, env.player.shoot_cooldown_remaining,
+            env.player.invulnerable_remaining,
+            tuple((e.x, e.y, e.health) for e in env.enemies),
+            tuple((s.x, s.y, s.health, s.spawn_timer) for s in env.spawners),
+            tuple((b.x, b.y, b.lifetime_remaining) for b in env.bullets),
+            env.phase, env.steps, env.enemies_killed, env.spawners_destroyed,
+            env.damage_taken, env.episode_return,
+        )
+
+    before = snapshot()
+    for _ in range(10):
         renderer.draw(env)
+    assert snapshot() == before
+
+
+def test_a_full_episode_renders_without_error(env, renderer):
+    """Exercises every branch a real playback hits: spawns, kills, damage, phase change, death."""
+    for _ in range(400):
+        _obs, _r, terminated, truncated, _info = env.step(env.action_space.sample())
         renderer.draw(env)
-        assert np.array_equal(actual[0], expected[0])
-        assert actual[1:] == expected[1:]
-        assert pickle.dumps(env.__dict__) == pickle.dumps(reference.__dict__)
-        if actual[2] or actual[3]:
-            break
-    renderer.close()
-
-
-@pytest.mark.parametrize('style', CONTROL_STYLES)
-def test_scripted_demo_exercises_movement_spawning_shooting_and_collisions(style):
-    env = ArenaEnv(control_style=style, seed=0)
-    start = env.player.position
-    moved = spawned = fired = collided = False
-    for _ in range(600):
-        _, _, terminated, truncated, _ = env.step(scripted_action(env))
-        moved |= env.player.position != start
-        spawned |= any(s.enemies_spawned > 0 for s in env.spawners)
-        fired |= bool(env.bullets) or env.enemies_killed > 0
-        collided |= env.enemies_killed > 0 or env.damage_taken > 0
         if terminated or truncated:
             break
-    assert moved and spawned and fired and collided
-
-
-def test_display_lifecycle_and_headless_isolation_in_a_fresh_process():
-    script = '''
-import pygame
-from arena.env import ArenaEnv
-from arena.render import ArenaRenderer, COLOR_PLAYER
-
-env = ArenaEnv(seed=0, render_mode='human')
-assert not pygame.display.get_init()
-offscreen = ArenaRenderer(headless=True, show_observation_overlay=False, effects=False)
-offscreen.draw(env)
-assert not pygame.display.get_init()
-offscreen.close()
-offscreen.close()
-assert not pygame.display.get_init()
-
-flips = []
-original_flip = pygame.display.flip
-def flip():
-    flips.append(True)
-    original_flip()
-pygame.display.flip = flip
-surface = env.render()
-assert pygame.display.get_surface() is surface
-assert tuple(surface.get_at((480, 340))[:3]) == COLOR_PLAYER
-assert len(flips) == 1
-for _ in range(3):
-    env.step(0)
-assert len(flips) == 1, 'step must not present or render'
-
-second = ArenaRenderer()
-try:
-    second.draw(env)
-except RuntimeError:
-    pass
-else:
-    raise AssertionError('must not replace an existing window')
-second.close()
-offscreen.draw(env)
-offscreen.close()
-assert pygame.display.get_surface() is surface
-assert len(flips) == 1
-pygame.font.init()
-env.close()
-env.close()
-assert not pygame.display.get_init()
-assert pygame.font.get_init(), 'close must not quit unrelated subsystems'
-assert env.render() is pygame.display.get_surface()
-env.close()
-pygame.font.quit()
-'''
-    result = subprocess.run([sys.executable, '-c', script], cwd=ROOT,
-                            env={**os.environ, 'SDL_VIDEODRIVER': 'dummy'},
-                            capture_output=True, text=True, timeout=30)
-    assert result.returncode == 0, result.stderr
-
-
-@pytest.mark.parametrize('style', CONTROL_STYLES)
-def test_demo_cli_runs_offscreen(style):
-    result = subprocess.run(
-        [sys.executable, '-m', 'arena.render', '--style', style, '--seed', '0',
-         '--headless', '--frames', '600'], cwd=ROOT, capture_output=True, text=True, timeout=30,
-    )
-    assert result.returncode == 0, result.stderr
-    assert 'not a trained policy' in result.stdout
-    assert 'Rendered 600 frames' in result.stdout
+    renderer.close()

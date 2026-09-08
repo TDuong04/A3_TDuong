@@ -25,6 +25,18 @@ sweep:
     gamma: [0.95, 0.99]
     net_arch: [[64, 64], [128, 128]]
   confirm_seeds: [0, 1, 2]
+  confirm_top_k: 2          # a one-seed win is not a result; the best two are re-run on every seed
+  summary_episodes: 100     # episodes at the tail of a run averaged into its reported metrics
+  # Phase gain at or below this, with episode reward up, is flagged as suspected reward hacking,
+  # so the flag reads as "did not move beyond noise". Sized against the seed-to-seed spread actually
+  # measured at this budget (top two configs: 1.027 +- 0.012 and 1.020 +- 0.008 over seeds 0-2),
+  # which is roughly two standard deviations. Note how small that spread is next to the gap between
+  # configs: at 100k the axes are not separated, which is why the winner is not auto-promoted.
+  reward_hack_phase_tolerance: 0.02
+  # Deterministic episodes per model in the promote stage. The tables above rank on
+  # training-time stochastic rollouts; what ships is the deterministic policy, so the promote
+  # decision is measured separately and can disagree with the ranking that produced it.
+  promote_episodes: 30
 
 # Phase 1 must be clearable in roughly 20-30 seconds by a trained agent, because the video rubric
 # requires at least one visible phase progression. Difficulty lives in phases 2+.
@@ -89,6 +101,7 @@ evaluation:
   episodes: 5
   fps: 60
   show_observation_overlay: true  # the debug overlay; doubles as report figure and video moment
+  show_policy_overlay: true       # action probabilities and V(s): the algorithm, on screen
 
 # Renderer-only feedback. These values never enter physics, rewards, or observations.
 visual_feedback:
