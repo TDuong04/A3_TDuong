@@ -381,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         controls = ("WASD / arrows to steer, SPACE to shoot" if args.style == "rotation"
                     else "WASD / arrows to move, SPACE to shoot")
-        print(f"human play, style {args.style}: {controls}. O toggles the overlay, ESC quits.")
+        print(f"human play, style {args.style}: {controls}. O toggles observation, V policy, E effects, ESC quits.")
         play(args.style, episodes=args.episodes, seed=args.seed, human=True)
         return 0
 

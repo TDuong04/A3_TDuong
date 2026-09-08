@@ -102,3 +102,14 @@ evaluation:
   fps: 60
   show_observation_overlay: true  # the debug overlay; doubles as report figure and video moment
   show_policy_overlay: true       # action probabilities and V(s): the algorithm, on screen
+
+# Renderer-only feedback. These values never enter physics, rewards, or observations.
+visual_feedback:
+  muzzle_seconds: 0.10
+  hit_seconds: 0.24
+  explosion_seconds: 0.55
+  shake_seconds: 0.20
+  shake_pixels: 4
+  particle_speed: 95
+  particle_count: 12
+  max_events: 32

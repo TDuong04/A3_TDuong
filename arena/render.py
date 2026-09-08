@@ -47,6 +47,7 @@ from common.config import load_yaml
 from .constants import ARENA_HEIGHT, ARENA_WIDTH, FPS
 from .observation import describe
 from .policy_view import PolicyView
+from .visuals import CombatFeedback, PerceptionOverlay
 
 # --- palette (simple shapes, high contrast so the video reads at small sizes) --------------------
 
@@ -82,6 +83,7 @@ BANNER_SECONDS = 1.6
 CONTROLS: tuple[tuple[str, str], ...] = (
     ("O / TAB", "observation overlay"),
     ("V", "policy overlay"),
+    ("E", "effects"),
     ("ESC", "quit"),
 )
 
@@ -130,6 +132,7 @@ class ArenaRenderer:
         fps: int | None = None,
         config: ArenaRenderConfig | None = None,
         caption: str = "A3 Arena",
+        effects: bool = True,
     ) -> None:
         """`fps` overrides the config block; everything else comes from config.
 
@@ -146,6 +149,9 @@ class ArenaRenderer:
         self.show_observation_overlay = self.config.show_observation_overlay
         self.show_policy_overlay = self.config.show_policy_overlay
         self.should_close = False
+        self.effects_enabled = effects
+        self.feedback = CombatFeedback()
+        self.perception = PerceptionOverlay()
 
         # Fonts are the only pygame subsystem needed off-screen, and font.init() is independent of
         # the video subsystem — so a headless renderer never touches the display at all.
@@ -194,6 +200,16 @@ class ArenaRenderer:
         self.show_observation_overlay = not self.show_observation_overlay
         return self.show_observation_overlay
 
+    def toggle_effects(self) -> bool:
+        self.effects_enabled = not self.effects_enabled
+        self.feedback.reset()
+        return self.effects_enabled
+
+    def observe(self, env: Any) -> None:
+        """Optional per-step sampling; draw also samples without duplicating events."""
+        if self.effects_enabled:
+            self.feedback.observe(env)
+
     def toggle_policy_overlay(self) -> bool:
         """Flip the policy panel and report its new state."""
         self.show_policy_overlay = not self.show_policy_overlay
@@ -230,6 +246,18 @@ class ArenaRenderer:
             panel_y = self._draw_observation_overlay(surface, env)
         if self.show_policy_overlay and policy_view is not None:
             self._draw_policy_panel(surface, policy_view, panel_y)
+        # Effects use arena coordinates on a clipped playfield. Shake only this region,
+        # after world links are drawn; the HUD, panels and compass remain stationary.
+        if self.effects_enabled:
+            field_surface = surface.subsurface(field)
+            self.feedback.draw(field_surface)
+            offset = self.feedback.offset
+            if offset != (0, 0):
+                image = field_surface.copy()
+                field_surface.fill(COLOR_FIELD)
+                field_surface.blit(image, offset)
+        if self.show_observation_overlay:
+            self.perception.draw_compass(surface, env)
         self._draw_hud(surface, env, policy_view)
         if self._banner_remaining > 0.0:
             self._draw_phase_banner(surface)
@@ -244,6 +272,7 @@ class ArenaRenderer:
             pygame.display.quit()
         self.surface = None
         self._clock = None
+        self.feedback.reset()
 
     # --- frame plumbing -----------------------------------------------------------------------
 
@@ -265,11 +294,15 @@ class ArenaRenderer:
                     self.should_close = True
                 elif event.key in (pygame.K_o, pygame.K_TAB):
                     self.toggle_observation_overlay()
+                elif event.key == pygame.K_e:
+                    self.toggle_effects()
                 elif event.key == pygame.K_v:
                     self.toggle_policy_overlay()
 
     def _advance_effects(self, env: Any, dt: float) -> None:
         """Latch the one-step phase flag into a wall-clock countdown, and age the pulse timer."""
+        self.feedback.advance(dt)
+        self.observe(env)
         self._elapsed += dt
         if getattr(env, "phase_just_advanced", False):
             self._banner_remaining = BANNER_SECONDS
@@ -380,7 +413,7 @@ class ArenaRenderer:
         hint = "  ".join(f"{key} {what}" for key, what in CONTROLS)
         surface.blit(
             self.font_small.render(hint, True, COLOR_TEXT_DIM),
-            (self.surface_size[0] - 14 - self.font_small.size(hint)[0], 20),
+            (self.surface_size[0] - 14 - self.font_small.size(hint)[0], 43),
         )
 
     def _draw_observation_overlay(self, surface: pygame.Surface, env: Any) -> int:
