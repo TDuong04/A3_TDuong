@@ -60,15 +60,15 @@ import json
 import re
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
 import pygame
 
-from common.config import load_yaml
+from common.config import TabularConfig, load_yaml
 from common.seeding import make_rng
-from gridworld.algorithms import QTable, load_q_table, select_action
+from gridworld.algorithms import LiveLearner, QTable, load_q_table, select_action
 from gridworld.constants import N_ACTIONS
 from gridworld.env import GridWorld
 from gridworld.levels import N_LEVELS
@@ -390,7 +390,7 @@ class ReplayApp(PlaybackApp):
 
     def update(self, dt: float) -> None:
         super().update(dt)
-        if self.restart_seconds is None:
+        if self.restart_seconds is None or self.paused:
             return
         if not self.env.done:
             self._done_for = 0.0
@@ -398,6 +398,77 @@ class ReplayApp(PlaybackApp):
         self._done_for += dt
         if self._done_for >= self.restart_seconds:
             self.restart()
+
+
+class LearningApp(ReplayApp):
+    """Opt-in live learning, isolated from saved-policy evaluation and artefacts."""
+
+    def __init__(self, level: int, algo: str, *, intrinsic_strength: float | None = None,
+                 learning_config: TabularConfig | None = None,
+                 policy_seed: int | None = None, **kwargs) -> None:
+        self.algo = algo
+        self.intrinsic_strength = intrinsic_strength
+        self.learning_config = learning_config
+        base = learning_config or TabularConfig.from_yaml()
+        self.learning_rng = make_rng(base.seed if policy_seed is None else policy_seed)
+        policy = GreedyPolicy({}, rng=self.learning_rng)
+        super().__init__(level, policy, label=ALGO_LABELS[algo], **kwargs)
+        self._start_learner()
+        self.renderer.show_debug = True
+        self.paused = True
+
+    def _start_learner(self) -> None:
+        if self.learning_config is None:
+            data = load_yaml("gridworld")
+            values = dict(data["training"])
+            values.update((data.get("level_overrides") or {}).get(self.env.level_index) or {})
+            config = TabularConfig(**values)
+        else:
+            config = self.learning_config
+        strength = (config.intrinsic_reward_strength if self.intrinsic_strength is None
+                    else self.intrinsic_strength) if self.env.level_index == 6 else 0.0
+        config = replace(config, intrinsic_reward_strength=strength)
+        self.env.max_steps = config.max_steps_per_episode
+        self.live = LiveLearner(self.env, config, self.algo, rng=self.learning_rng,
+                                q_table=self.greedy_policy.table_for(self.env.level_index))
+        self.greedy_policy.tables[self.env.level_index] = self.live.q
+        self.learner = LearnerInfo(algorithm=self.algo, alpha=config.alpha,
+                                   gamma=config.gamma, intrinsic_strength=strength)
+        self.message = "live learning: SPACE to run, N to update"
+
+    def status(self) -> dict:
+        status = super().status()
+        status.update(mode="learning", learning_update=self.live.latest,
+                      cell_visits=self.live.cell_visits)
+        return status
+
+    def policy_step(self) -> None:
+        if self.live.step() is not None:
+            self.renderer.sync(self.env)
+            self.message = ("episode over: R resets; N holds final update" if self.env.done
+                            else f"learning episode {self.live.episode + 1}")
+
+    def step(self, action: int) -> None:
+        # A human move is an environment transition, never an epsilon-greedy update.
+        if self.env.done:
+            return
+        super().step(action)
+        self.live.counts.record(self.env.state)
+        self.live.cell_visits[self.env.state[:2]] += 1
+        self.live.latest = None
+        self.live.pending = (self.live._select(self.env.state)
+                             if self.algo == "sarsa" and not self.env.done else None)
+        self.message = "human move: no learning update; N resumes learning"
+
+    def reset(self) -> None:
+        super().reset()
+        self.live.begin_episode()
+
+    def load_level(self, level: int) -> None:
+        if not 0 <= level < N_LEVELS:
+            return
+        super().load_level(level)
+        self._start_learner()
 
 
 def build_app(
@@ -475,6 +546,7 @@ class CompareApp:
         if not apps:
             raise ValueError("CompareApp needs at least one panel")
         self.apps = tuple(apps)
+        self.selected_index: int | None = None
         self.headless = bool(headless)
         self.caption = caption
         self.restart_seconds = restart_seconds
@@ -495,9 +567,13 @@ class CompareApp:
 
     # --- geometry -----------------------------------------------------------------------------
 
+    @property
+    def visible_apps(self) -> tuple[ReplayApp, ...]:
+        return self.apps if self.selected_index is None else (self.apps[self.selected_index],)
+
     def panel_sizes(self) -> list[tuple[int, int]]:
         return [
-            app.renderer.surface_size(app.env.n_rows, app.env.n_cols) for app in self.apps
+            app.renderer.surface_size(app.env.n_rows, app.env.n_cols) for app in self.visible_apps
         ]
 
     def surface_size(self) -> tuple[int, int]:
@@ -522,6 +598,10 @@ class CompareApp:
     # --- frame --------------------------------------------------------------------------------
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_TAB:
+            candidate = 0 if self.selected_index is None else self.selected_index + 1
+            self.selected_index = candidate if candidate < len(self.apps) else None
+            return
         for app in self.apps:
             app.handle_event(event)
         # A quit or ESC stops every panel, so asking whether they all still want to run is the
@@ -531,7 +611,7 @@ class CompareApp:
     def update(self, dt: float) -> None:
         for app in self.apps:
             app.update(dt)
-        if self.restart_seconds is None:
+        if self.restart_seconds is None or any(app.paused for app in self.apps):
             return
         if not all(app.env.done for app in self.apps):
             self._done_for = 0.0
@@ -549,7 +629,7 @@ class CompareApp:
         pygame.draw.rect(surface, COLOR_PANEL, header)
 
         x = 0
-        for app in self.apps:
+        for app in self.visible_apps:
             panel = app.draw()
             surface.blit(panel, (x, self.header_height))
             self._draw_header(surface, app, x, panel.get_width())
@@ -679,6 +759,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--algo", choices=sorted(ALGO_LABELS), default="q", help="which trained policy to play"
     )
+    parser.add_argument("--learn", action="store_true",
+                        help="demonstrate real updates on fresh in-memory tables; starts paused")
+    parser.add_argument("--intrinsic-strength", type=float, default=None,
+                        help="live-learning bonus strength on level 6 only")
     parser.add_argument(
         "--compare",
         action="store_true",
@@ -731,14 +815,38 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not 0 <= level < N_LEVELS:
         parser.error(f"--level must be in 0..{N_LEVELS - 1}")
 
+    if args.intrinsic_strength is not None and (
+        not args.learn or not np.isfinite(args.intrinsic_strength) or args.intrinsic_strength < 0
+    ):
+        parser.error("--intrinsic-strength requires --learn and a finite non-negative value")
+
     # The overlay is on unless the config or the CLI turns it off: it is the frame that proves the
     # agent is following a policy, so playback should never start without it by accident.
     show_arrows = False if args.no_arrows else RenderConfig.from_yaml().show_policy_arrows
     show_heatmap = True if args.heatmap else None
 
     try:
-        if args.compare:
-            app: CompareApp | ReplayApp = build_compare_app(
+        if args.learn:
+            playback = PlaybackConfig.from_yaml()
+            algos = ("q", "sarsa") if args.compare else (args.algo,)
+            apps = [LearningApp(
+                level, algo, intrinsic_strength=args.intrinsic_strength,
+                policy_seed=args.policy_seed,
+                seed=args.env_seed if args.env_seed is not None else TabularConfig.from_yaml().seed,
+                headless=args.compare,
+                cell_size=args.cell_size or (playback.compare_cell_size if args.compare else None),
+                fps=args.fps,
+                restart_seconds=None if args.compare or args.no_loop else playback.restart_seconds,
+            ) for algo in algos]
+            for learning_app in apps:
+                learning_app.renderer.show_policy_arrows = show_arrows
+                if show_heatmap is not None:
+                    learning_app.renderer.show_q_values = show_heatmap
+            app = (CompareApp(apps, fps=args.fps,
+                              restart_seconds=None if args.no_loop else playback.restart_seconds)
+                   if args.compare else apps[0])
+        elif args.compare:
+            app = build_compare_app(
                 level,
                 seed=args.seed,
                 env_seed=args.env_seed,
@@ -781,7 +889,7 @@ def _startup_banner(args: argparse.Namespace, level: int) -> str:
         if args.compare
         else ALGO_LABELS.get(args.algo, args.algo)
     )
-    table = "" if args.compare else f"\nQ-table: {find_q_table(args.results_dir, level, args.algo, args.seed)}"
+    table = "\nFresh in-memory learning tables (starts paused)" if args.learn else "" if args.compare else f"\nQ-table: {find_q_table(args.results_dir, level, args.algo, args.seed)}"
     controls = ", ".join(f"{key} = {what}" for key, what in CONTROLS)
     return f"Level {level} — {who}{table}\nControls: {controls}"
 

@@ -99,8 +99,34 @@ The project is marked partly from a live demo, so both windows are driveable fro
 | `0`–`6`         | switch level — every level's trained table is loaded, not just the one requested |
 | `P`             | greedy policy arrows                                                             |
 | `Q` / `H`       | per-cell Q-value heatmap                                                         |
+| `I`             | latest real learning update panel                                               |
+| `V`             | episode visit-count heatmap (separate from Q values)                             |
+| `TAB`           | comparison view: both panels → Q-learning → SARSA → both                        |
 | arrows / `WASD` | take the move yourself; playback pauses so you and the policy cannot fight       |
 | `ESC`           | quit                                                                             |
+
+To demonstrate the learning math, start an opt-in live session (fresh in-memory tables,
+no saved artefacts modified):
+
+```bash
+python -m eval.play_gridworld --learn --level 1 --compare --env-seed 0 --policy-seed 0
+python -m eval.play_gridworld --learn --level 6 --algo sarsa --intrinsic-strength 0.5
+```
+
+Live sessions start paused with the debug panel open. Press `N` for one actual update,
+`SPACE` to run/pause, and `V` to show episode cell visits. `TAB` selects a comparison
+panel while both learners keep stepping together. `R` starts the next learning episode,
+retaining Q values and advancing the configured epsilon schedule; switching levels clears
+the latest update and counts and starts that level's schedule while retaining its in-memory
+table. A paused terminal frame stays visible until resumed or reset.
+
+The panel captures the epsilon roll and selection branch, Q before/after, and the actual
+TD target/error. SARSA shows the successor action it carries into the following step;
+Q-learning shows the maximum successor value. Termination zeros the bootstrap;
+truncation retains it. On level 6, the intrinsic bonus uses the full arrival state's
+**pre-arrival** count; the spatial heatmap aggregates cell occupancies including the start.
+Human moves clear the update panel because they do not perform learning updates.
+Ordinary playback remains frozen-table evaluation and cannot show historical learning math.
 
 **Arena** (`eval/play_arena.py`)
 

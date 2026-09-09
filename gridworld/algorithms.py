@@ -120,7 +120,17 @@ def epsilon_schedule(config: TabularConfig) -> LinearEpsilon:
     )
 
 
-def select_action(q_row: np.ndarray, epsilon: float, rng: np.random.Generator) -> int:
+@dataclass(frozen=True)
+class ActionSelection:
+    action: int
+    roll: float
+    exploratory: bool
+
+
+def select_action(
+    q_row: np.ndarray, epsilon: float, rng: np.random.Generator,
+    *, trace: list[ActionSelection] | None = None,
+) -> int:
     """Epsilon-greedy with a *random* tie-break among equal-valued actions.
 
     `np.argmax` is banned here (rubric B4). It returns the lowest index among ties, so on a
@@ -128,11 +138,17 @@ def select_action(q_row: np.ndarray, epsilon: float, rng: np.random.Generator) -
     spend its first episodes hugging the top wall, and the bias never fully washes out because the
     states it never leaves never get explored.
     """
-    if rng.random() < epsilon:
-        return int(rng.integers(N_ACTIONS))
-    q_row = np.asarray(q_row)
-    best = np.flatnonzero(q_row == q_row.max())
-    return int(rng.choice(best))
+    roll = float(rng.random())
+    exploratory = roll < epsilon
+    if exploratory:
+        action = int(rng.integers(N_ACTIONS))
+    else:
+        q_row = np.asarray(q_row)
+        best = np.flatnonzero(q_row == q_row.max())
+        action = int(rng.choice(best))
+    if trace is not None:
+        trace.append(ActionSelection(action, roll, exploratory))
+    return action
 
 
 @dataclass(frozen=True)
@@ -720,3 +736,106 @@ def load_q_table(path: str | Path) -> QTable:
     for (row, col, has_key, mask), q_row in zip(states, values, strict=True):
         q_table[(int(row), int(col), bool(has_key), int(mask))] = np.array(q_row, dtype=np.float64)
     return q_table
+
+
+@dataclass(frozen=True)
+class LearningUpdate:
+    """Immutable values captured at the update, never inferred from a later table."""
+
+    algorithm: str
+    state: State
+    action: int
+    reward: float
+    next_state: State
+    q_before: float
+    q_after: float
+    bootstrap: float
+    next_action: int | None
+    target: float
+    error: float
+    epsilon: float
+    selection: ActionSelection
+    alpha: float
+    gamma: float
+    terminated: bool
+    truncated: bool
+    intrinsic_strength: float
+    prior_visits: int
+    intrinsic_bonus: float
+    shaped_reward: float
+
+
+class LiveLearner:
+    """One real TD update per step for the opt-in learning demonstration.
+
+    Owns learning state, not display state. Drawing and overlay toggles never call
+    into this class. SARSA carries both the chosen action and its original roll.
+    Frozen-policy evaluation continues using GreedyPolicy without this learner.
+    """
+
+    def __init__(self, env: GridWorld, config: TabularConfig, algo: str,
+                 *, rng: np.random.Generator | None = None,
+                 q_table: QTable | None = None) -> None:
+        if algo not in ("q", "sarsa"):
+            raise ValueError(f"unknown algorithm: {algo}")
+        self.env, self.config, self.algo = env, config, algo
+        self.rng = make_rng(config.seed) if rng is None else rng
+        self.q = make_q_table() if q_table is None else q_table
+        self.counts = EpisodeVisitCounts()
+        self.cell_visits: Counter[Coord] = Counter()
+        self.episode = -1
+        self.latest: LearningUpdate | None = None
+        self.pending: ActionSelection | None = None
+        self.begin_episode()
+
+    def begin_episode(self) -> None:
+        """Called after the caller resets the environment; retain learned Q values."""
+        self.episode += 1
+        self.epsilon = epsilon_schedule(self.config)(self.episode)
+        self.counts.reset()
+        self.counts.record(self.env.state)
+        self.cell_visits.clear()
+        self.cell_visits[self.env.state[:2]] += 1
+        self.latest = None
+        self.pending = self._select(self.env.state) if self.algo == "sarsa" else None
+
+    def _select(self, state: State) -> ActionSelection:
+        trace: list[ActionSelection] = []
+        select_action(self.q[state], self.epsilon, self.rng, trace=trace)
+        return trace[0]
+
+    def step(self) -> LearningUpdate | None:
+        if self.env.done:
+            return None
+        state = self.env.state
+        selection = self.pending if self.algo == "sarsa" else self._select(state)
+        assert selection is not None
+        action = selection.action
+        next_state, reward, _, info = self.env.step(action)
+        prior = self.counts.record(next_state)
+        self.cell_visits[next_state[:2]] += 1
+        strength = self.config.intrinsic_reward_strength
+        bonus = intrinsic_reward(strength, prior)
+        shaped = reward + bonus
+        next_selection = None
+        bootstrap = 0.0
+        if not info["terminated"]:
+            if self.algo == "q":
+                bootstrap = float(self.q[next_state].max())
+            else:
+                next_selection = self._select(next_state)
+                bootstrap = float(self.q[next_state][next_selection.action])
+        target = shaped + self.config.gamma * bootstrap
+        before = float(self.q[state][action])
+        error = target - before
+        self.q[state][action] += self.config.alpha * error
+        self.latest = LearningUpdate(
+            self.algo, state, action, reward, next_state, before,
+            float(self.q[state][action]), bootstrap,
+            None if next_selection is None else next_selection.action,
+            target, error, self.epsilon, selection, self.config.alpha,
+            self.config.gamma, bool(info["terminated"]), bool(info["truncated"]),
+            strength, prior, bonus, shaped,
+        )
+        self.pending = next_selection
+        return self.latest
