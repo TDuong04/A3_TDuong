@@ -144,6 +144,7 @@ cite these in the report rather than re-deriving numbers by hand.
 | [`results/intrinsic_level6_q.md`](results/intrinsic_level6_q.md)           | row F: the count-based bonus swept over five strengths and five seeds — an honest negative result                                             |
 | [`results/arena_sweep/sweep_table.md`](results/arena_sweep/sweep_table.md) | row J3: the hyperparameter sweep, one axis at a time, confirmed across seeds, with a reward-hacking flag                                      |
 | [`results/arena_eval/comparison.md`](results/arena_eval/comparison.md)     | row I: the two control schemes measured head-to-head on the same seeded arenas                                                                |
+| [`results/arena_validation/validation.md`](results/arena_validation/validation.md) | row H: the observation vector stress-tested — per-feature ranges, dead/saturated features by name, determinism, termination and steps/second   |
 | [`results/arena_eval/comparison_random.md`](results/arena_eval/comparison_random.md) | row I: the same 30 seeded arenas under a uniform random policy — the baseline that makes "clears 29 of 30" mean something                       |
 | [`docs/evaluations/`](docs/evaluations/)                                   | dated whole-project audits against the rubric, each pinned to the commit it measured                                                          |
 
