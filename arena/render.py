@@ -15,7 +15,7 @@ legible to a marker.
 
 The observation overlay (toggle with O or TAB, default from `show_observation_overlay` in
 `config/arena.yaml`) draws exactly what the agent sees: lines to the nearest enemy and nearest
-spawner, the ship-local heading vector, and the full 21-feature vector as a live name/value panel
+spawner, the ship-local heading vector, and the full 20-feature vector as a live name/value panel
 read from `observation.describe()`, so the labels can never drift from the layout. It costs an hour
 and pays three times — creativity marks, the report's observation-design figure, and the most
 persuasive thirty seconds of the video.

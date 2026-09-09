@@ -1,8 +1,8 @@
 {
   "control_style": "rotation",
   "policy": "MlpPolicy",
-  "started": "2026-09-06T18:23:06",
-  "git_commit": "66316d1",
+  "started": "2026-09-09T17:37:36",
+  "git_commit": "2a4f6ce",
   "algorithm": "PPO",
   "total_timesteps": 400000,
   "n_envs": 8,
@@ -17,8 +17,8 @@
   ],
   "seed": 0,
   "run_name": "ppo_rotation_shipped",
-  "model_path": "models/ppo_rotation.zip",
+  "model_path": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/models/ppo_rotation.zip",
   "ignored_hyperparameters": [],
-  "finished": "2026-09-06T18:23:06",
-  "wall_clock_seconds": 29.3
+  "finished": "2026-09-09T17:37:36",
+  "wall_clock_seconds": 35.1
 }

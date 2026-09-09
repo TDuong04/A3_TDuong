@@ -1,8 +1,8 @@
 {
   "control_style": "direct",
   "policy": "MlpPolicy",
-  "started": "2026-09-06T18:24:08",
-  "git_commit": "66316d1",
+  "started": "2026-09-09T17:33:16",
+  "git_commit": "2a4f6ce",
   "algorithm": "PPO",
   "total_timesteps": 400000,
   "n_envs": 8,
@@ -17,8 +17,8 @@
   ],
   "seed": 1,
   "run_name": "ppo_direct_shipped",
-  "model_path": "models/ppo_direct.zip",
+  "model_path": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/models/ppo_direct.zip",
   "ignored_hyperparameters": [],
-  "finished": "2026-09-06T18:24:08",
-  "wall_clock_seconds": 29.1
+  "finished": "2026-09-09T17:33:16",
+  "wall_clock_seconds": 127.2
 }

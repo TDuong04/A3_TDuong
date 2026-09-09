@@ -1,8 +1,8 @@
 {
   "ticket": "A3-021",
-  "generated": "2026-09-07T11:05:27+00:00",
+  "generated": "2026-09-09T10:38:33+00:00",
   "python": "3.14.6",
-  "obs_dim": 21,
+  "obs_dim": 20,
   "random_steps_per_style": 10000,
   "episode_trials_per_style": 200,
   "action_spaces": {
@@ -213,16 +213,6 @@
         },
         {
           "index": 17,
-          "name": "spawner_exists",
-          "min": 1.0,
-          "max": 1.0,
-          "mean": 1.0,
-          "std": 0.0,
-          "distinct": 1,
-          "frac_at_bound": 1.0
-        },
-        {
-          "index": 18,
           "name": "shoot_cooldown",
           "min": 0.0,
           "max": 0.800000011920929,
@@ -232,7 +222,7 @@
           "frac_at_bound": 0.0
         },
         {
-          "index": 19,
+          "index": 18,
           "name": "enemies_alive",
           "min": 0.0,
           "max": 0.699999988079071,
@@ -242,7 +232,7 @@
           "frac_at_bound": 0.0
         },
         {
-          "index": 20,
+          "index": 19,
           "name": "spawners_alive",
           "min": 0.1666666716337204,
           "max": 0.3333333432674408,
@@ -435,16 +425,6 @@
         },
         {
           "index": 17,
-          "name": "spawner_exists",
-          "min": 1.0,
-          "max": 1.0,
-          "mean": 1.0,
-          "std": 0.0,
-          "distinct": 1,
-          "frac_at_bound": 1.0
-        },
-        {
-          "index": 18,
           "name": "shoot_cooldown",
           "min": 0.0,
           "max": 0.800000011920929,
@@ -454,7 +434,7 @@
           "frac_at_bound": 0.0
         },
         {
-          "index": 19,
+          "index": 18,
           "name": "enemies_alive",
           "min": 0.0,
           "max": 0.6000000238418579,
@@ -464,7 +444,7 @@
           "frac_at_bound": 0.0
         },
         {
-          "index": 20,
+          "index": 19,
           "name": "spawners_alive",
           "min": 0.1666666716337204,
           "max": 0.3333333432674408,
@@ -479,29 +459,25 @@
   "feature_classification": {
     "rotation": {
       "dead": [
-        "phase",
-        "spawner_exists"
+        "phase"
       ],
       "saturated": [
         "health"
       ],
       "saturated_indicators": [
-        "enemy_exists",
-        "spawner_exists"
+        "enemy_exists"
       ]
     },
     "direct": {
       "dead": [
-        "phase",
-        "spawner_exists"
+        "phase"
       ],
       "saturated": [
         "heading_cos",
         "health"
       ],
       "saturated_indicators": [
-        "enemy_exists",
-        "spawner_exists"
+        "enemy_exists"
       ]
     }
   },
@@ -510,46 +486,34 @@
       "health": {
         "min": 0.20000000298023224,
         "max": 1.0,
-        "std": 0.2833274358576419,
+        "std": 0.23776248449531337,
         "moves_under_trained_policy": true
       },
       "phase": {
         "min": 0.0,
         "max": 0.5,
-        "std": 0.23718979741970356,
+        "std": 0.2359952330027028,
         "moves_under_trained_policy": true
-      },
-      "spawner_exists": {
-        "min": 1.0,
-        "max": 1.0,
-        "std": 0.0,
-        "moves_under_trained_policy": false
       }
     },
     "direct": {
       "heading_cos": {
         "min": -1.0,
         "max": 1.0,
-        "std": 0.8124533866148409,
+        "std": 0.7392256807185218,
         "moves_under_trained_policy": true
       },
       "health": {
         "min": 0.20000000298023224,
         "max": 1.0,
-        "std": 0.23367057155781187,
+        "std": 0.2121068048817869,
         "moves_under_trained_policy": true
       },
       "phase": {
         "min": 0.0,
         "max": 1.0,
-        "std": 0.3503653227347136,
+        "std": 0.33011730869495465,
         "moves_under_trained_policy": true
-      },
-      "spawner_exists": {
-        "min": 1.0,
-        "max": 1.0,
-        "std": 0.0,
-        "moves_under_trained_policy": false
       }
     }
   },
@@ -635,14 +599,14 @@
     "rotation": {
       "style": "rotation",
       "steps": 50000,
-      "seconds": 0.568,
-      "steps_per_second": 88039.4
+      "seconds": 0.601,
+      "steps_per_second": 83164.4
     },
     "direct": {
       "style": "direct",
       "steps": 50000,
-      "seconds": 0.668,
-      "steps_per_second": 74839.1
+      "seconds": 0.704,
+      "steps_per_second": 71000.4
     }
   }
 }
