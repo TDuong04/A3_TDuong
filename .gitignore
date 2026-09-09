@@ -20,9 +20,12 @@ Thumbs.db
 scratch/
 *.tmp
 
-# Local AI tooling — not part of the submission
-.claude/
-CLAUDE.md
+# Shared AI tooling. CLAUDE.md, the agent roster and the lecture reference are committed so that
+# every member's Claude Code session starts from the same context. Only local, per-machine settings
+# stay untracked. Delete .claude/ before building the submission zip if you would rather not ship it.
+.claude/*
+!.claude/agents/
+!.claude/A3-lecture-reference.md
 
 # NOTE: models/ logs/ and results/ are deliberately NOT ignored.
 # The brief requires saved models and TensorBoard logs inside the submitted zip.
