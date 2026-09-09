@@ -108,7 +108,7 @@ The project is marked partly from a live demo, so both windows are driveable fro
 
 | Key             | Does                                                          |
 | --------------- | ------------------------------------------------------------- |
-| `O` / `TAB`     | observation overlay — all 21 features, live                   |
+| `O` / `TAB`     | observation overlay — all 20 features, live                   |
 | `V`             | policy overlay — action probabilities and `V(s)`              |
 | arrows / `WASD` | human play: move (`direct`) or rotate and thrust (`rotation`) |
 | `SPACE`         | human play: shoot                                             |
@@ -125,7 +125,7 @@ window.
 | Gridworld **Learner** panel                 | algorithm name, alpha, gamma, the epsilon schedule and the episode budget that trained the policy on screen — read from the run's own summary, never from the config |
 | Gridworld overlays                          | greedy policy arrows (`P`), per-cell Q-value heatmap (`Q` / `H`)                                                                                                     |
 | Arena HUD                                   | phase, health, score, step, current action, control style                                                                                                            |
-| Arena **observation** overlay (`O` / `TAB`) | all 21 features live, plus lines to the nearest enemy and spawner and the ship-local heading                                                                         |
+| Arena **observation** overlay (`O` / `TAB`) | all 20 features live, plus lines to the nearest enemy and spawner and the ship-local heading                                                                         |
 | Arena **policy** overlay (`V`)              | the action probability the network assigned to every action, the one it chose, and the critic's `V(s)`                                                               |
 
 In `--compare` mode the two gridworld panels each carry their own Learner block, so "Q-learning and
@@ -145,7 +145,7 @@ cite these in the report rather than re-deriving numbers by hand.
 | [`results/arena_sweep/sweep_table.md`](results/arena_sweep/sweep_table.md) | row J3: the hyperparameter sweep, one axis at a time, confirmed across seeds, with a reward-hacking flag                                      |
 | [`results/arena_eval/comparison.md`](results/arena_eval/comparison.md)     | row I: the two control schemes measured head-to-head on the same seeded arenas                                                                |
 | [`results/arena_validation/validation.md`](results/arena_validation/validation.md) | row H: the observation vector stress-tested — per-feature ranges, dead/saturated features by name, determinism, termination and steps/second   |
-| [`results/arena_eval/comparison_random.md`](results/arena_eval/comparison_random.md) | row I: the same 30 seeded arenas under a uniform random policy — the baseline that makes "clears 29 of 30" mean something                       |
+| [`results/arena_eval/comparison_random.md`](results/arena_eval/comparison_random.md) | row I: the same 30 seeded arenas under a uniform random policy — the baseline that makes "clears 28 of 30" mean something                       |
 | [`docs/evaluations/`](docs/evaluations/)                                   | dated whole-project audits against the rubric, each pinned to the commit it measured                                                          |
 
 `results/` also holds the training curves, policy figures, per-run summaries, episode histories and
