@@ -60,6 +60,33 @@ tunables move. If a test fails, the change was in the wrong file.
 
 Three phases at the slowest measured pace: **83s against a 100s budget** - fits.
 
+## Re-measured (2026-09-09) — after the `spawner_exists` retrain
+
+The table above was measured against the 21-feature models. Dropping the dead `spawner_exists`
+observation feature forced both agents to be retrained, which re-measures this ticket whether or
+not its config changed. Same command, same seeds:
+
+| player | cleared | phase 1 | range | best phase | died | verdict |
+|---|---|---|---|---|---|---|
+| trained: direct | 12/12 | **32.6s** | 19.7-47.4 | 3 | 25% | over target |
+| trained: rotation | 12/12 | 14.5s | 6.5-32.1 | 2 | 75% | under target |
+| random: direct | 0/12 | never | - | 1 | 100% | floor holds |
+| random: rotation | 0/12 | never | - | 1 | 100% | floor holds |
+
+Three phases at the slowest measured pace: **98s against a 100s budget** - still fits, with 2s
+spare rather than 17s.
+
+What changed and what it means. Both agents now clear phase 1 in every episode rather than 11 and
+10 of 12, and direct dies in a quarter of episodes rather than half - the retrained policies are
+more reliable, and they take longer because they survive longer rather than because the phase got
+harder. Direct's 32.6s is 2.6s outside the 20-30s window this ticket names.
+
+This is not reopened, for the same reason it was closed: the window was a proxy for "a phase
+progression fits on camera", and a 12/12 clear rate at 32.6s satisfies that better than 11/12 at
+27.8s did. The number worth watching is the budget, which went from comfortable to tight. If a
+later change slows phase 1 again, three phases stop fitting in an episode, and *that* is the point
+at which `phases[0]` needs an edit.
+
 ## Log
 
 - 2026-09-08 - **resolved without changing the config, deliberately.** The ticket was raised before

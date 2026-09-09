@@ -3,6 +3,7 @@
     python -m eval.play_arena --style rotation
     python -m eval.play_arena --style direct --episodes 5
     python -m eval.play_arena --style direct --human
+    python -m eval.play_arena --style direct --random    # before anything has been trained
     python -m eval.play_arena --style both --episodes 5 --no-window   # the comparison table
 
 Rubric row I4 asks for an evaluation script that can visually run each trained agent, so this works
@@ -12,6 +13,12 @@ camera looks like a broken one, and the rubric asks for the deterministic policy
 This is what the video records for Part II. It has to show enemies spawning and moving, projectiles
 and collisions, and at least one phase progression -- so the summary below reports how often a phase
 was actually cleared, which is the thing to check *before* recording rather than after.
+
+With `models/` empty the script runs a random policy instead of refusing to start, so it is
+demonstrable before the first training run finishes -- and `--random` asks for that deliberately,
+as the baseline the trained agents are measured against. A random run is labelled as one everywhere
+it is written down, and never lands in the files the report's trained tables live in: a table that
+looks like a result and is not is worse than no table.
 
 `--human` plays the same environment from the keyboard, through the same `env.step()` the agent
 uses. It is a creativity feature, and it is also the fastest way to tell a broken environment from a
@@ -35,7 +42,7 @@ from typing import Any
 
 import numpy as np
 
-from arena.constants import DirectAction, RotationAction
+from arena.constants import N_ACTIONS, DirectAction, RotationAction
 from arena.env import ArenaEnv
 from arena.policy_view import probe
 
@@ -52,6 +59,34 @@ DETERMINISTIC = True
 
 class ArenaEvalError(Exception):
     """A problem the user can fix, printed as a message rather than raised as a traceback."""
+
+
+class RandomPolicy:
+    """A uniform random policy wearing SB3's `predict` signature.
+
+    Two jobs. It makes this script runnable before any model exists, which is what stops the whole
+    team queueing behind one training run to find out whether the playback loop works. And it is
+    the baseline every trained number is quoted against: "clears phase 1 in 4 of 5 episodes" means
+    nothing until someone knows what chance alone manages.
+
+    Seeded, so a random run reproduces exactly like a trained one -- a baseline nobody can re-derive
+    is not a baseline. `deterministic` is accepted and ignored: there is nothing here to be
+    deterministic about, and rejecting the argument would break the interchangeability that is the
+    entire point of matching the signature.
+    """
+
+    #: Recorded in every summary, filename and table this policy produces.
+    name = "random"
+
+    def __init__(self, n_actions: int, seed: int = 0) -> None:
+        self.n_actions = int(n_actions)
+        self._rng = np.random.default_rng(seed)
+
+    def predict(
+        self, observation: np.ndarray, deterministic: bool = True
+    ) -> tuple[np.int64, None]:
+        """An action index drawn uniformly, in the `(action, state)` shape SB3 returns."""
+        return np.int64(self._rng.integers(self.n_actions)), None
 
 
 def model_path(style: str, algo: str = "ppo") -> Path:
@@ -82,6 +117,47 @@ def load_agent(style: str, algo: str = "ppo", models_dir: Path | None = None):
     return loader.load(path, device="cpu")
 
 
+def has_trained_models(models_dir: Path | None = None) -> bool:
+    """Whether anything at all has been trained yet, in any style or algorithm.
+
+    Top-level `*.zip` only: `models/checkpoints/` fills up during a run that has not finished and
+    produced a final model yet, and treating a mid-run checkpoint as "trained" would send someone
+    to a policy that is still moving.
+    """
+    directory = Path(models_dir) if models_dir is not None else MODELS_DIR
+    return directory.exists() and any(directory.glob("*.zip"))
+
+
+def load_policy(
+    style: str,
+    algo: str = "ppo",
+    models_dir: Path | None = None,
+    *,
+    random: bool = False,
+    seed: int = 0,
+) -> tuple[Any, str]:
+    """The policy to run, and the name to record it under.
+
+    Two behaviours that read as contradictory and are not. With `models/` empty -- nothing trained
+    yet, in any style -- this falls back to a random policy so the script is demonstrable before
+    the first training run lands. With `models/` populated but *this* style missing, it raises:
+    that is a typo or a half-finished run, and substituting random actions there would quietly
+    produce a table indistinguishable from a trained result. Neither path ever trains on demand;
+    both name the command that would.
+    """
+    if random:
+        return RandomPolicy(N_ACTIONS[style], seed=seed), RandomPolicy.name
+    if not has_trained_models(models_dir):
+        directory = Path(models_dir) if models_dir is not None else MODELS_DIR
+        print(
+            f"No trained models in {_reportable(directory)} -- running a random policy.\n"
+            f"Train one with:\n    python -m train.train_arena --style {style}",
+            file=sys.stderr,
+        )
+        return RandomPolicy(N_ACTIONS[style], seed=seed), RandomPolicy.name
+    return load_agent(style, algo, models_dir), algo
+
+
 # --- headless evaluation --------------------------------------------------------------------------
 
 
@@ -93,6 +169,7 @@ def evaluate(
     algo: str = "ppo",
     models_dir: Path | None = None,
     agent: Any | None = None,
+    random_policy: bool = False,
 ) -> dict[str, Any]:
     """Run `episodes` seeded episodes with no window and return the numbers the report needs.
 
@@ -102,7 +179,12 @@ def evaluate(
     """
     if style not in STYLES:
         raise ValueError(f"unknown control style {style!r}; expected one of {STYLES}")
-    agent = load_agent(style, algo, models_dir) if agent is None else agent
+    if agent is None:
+        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed)
+    else:
+        # An injected agent names itself if it can. That is how a `RandomPolicy` handed in
+        # directly still labels its own output, rather than being filed under `ppo`.
+        policy = str(getattr(agent, "name", algo))
 
     env = ArenaEnv(control_style=style, render_mode=None)
     returns: list[float] = []
@@ -133,6 +215,9 @@ def evaluate(
 
     return {
         "style": style,
+        # Carried into every filename, summary and table below: a random baseline that reads as a
+        # trained result is the one way this script can actively mislead the report.
+        "policy": policy,
         "episodes": episodes,
         "seed": seed,
         "return_mean": mean(returns),
@@ -155,6 +240,7 @@ def format_summary(stats: dict[str, Any]) -> str:
     return "\n".join(
         (
             f"style              {stats['style']}",
+            f"policy             {stats.get('policy', 'ppo')}",
             f"episodes           {stats['episodes']} (seeds {stats['seed']}"
             f"-{stats['seed'] + stats['episodes'] - 1})",
             f"return             {stats['return_mean']:+.2f} +/- {stats['return_std']:.2f}",
@@ -196,14 +282,24 @@ def write_results(
 
     written: dict[str, Path] = {}
     for entry in stats:
-        path = directory / f"eval_{entry['style']}_seed{entry['seed']}.json"
+        path = directory / f"{_stem(entry)}.json"
         path.write_text(json.dumps({**entry, "generated": generated}, indent=2) + "\n")
         written[entry["style"]] = path
 
-    table = directory / "comparison.md"
+    # A random run never writes over the trained tables. `comparison.md` is what report row R6
+    # cites, and one absent-minded `--random` overwriting it would put chance-level numbers under
+    # a heading that claims a trained policy produced them.
+    random_run = any(entry.get("policy") == RandomPolicy.name for entry in stats)
+    table = directory / ("comparison_random.md" if random_run else "comparison.md")
     table.write_text(format_comparison_markdown(stats, generated))
     written["comparison"] = table
     return written
+
+
+def _stem(entry: dict[str, Any]) -> str:
+    """Filename stem for one style's numbers, keeping random runs off the trained filenames."""
+    prefix = "eval_random" if entry.get("policy") == RandomPolicy.name else "eval"
+    return f"{prefix}_{entry['style']}_seed{entry['seed']}"
 
 
 def format_comparison_markdown(stats: list[dict[str, Any]], generated: str) -> str:
@@ -212,20 +308,34 @@ def format_comparison_markdown(stats: list[dict[str, Any]], generated: str) -> s
     Ranked by nothing: with two control styles the interesting thing is the pair, not a winner, and
     sorting a two-row table implies a verdict the seeds may not support.
     """
+    random_run = any(entry.get("policy") == RandomPolicy.name for entry in stats)
+    if random_run:
+        # Said before the table rather than after it: a heading is what gets screenshotted.
+        policy_line = (
+            "**Random-policy baseline, not a trained result.** Actions are drawn uniformly from "
+            "the action space. These are the numbers chance alone produces on the same seeded "
+            "arenas, which is what makes the trained table above them mean anything.\n\n"
+        )
+        command = "--style both --no-window --random"
+    else:
+        policy_line = (
+            f"Deterministic policy (`deterministic={DETERMINISTIC}`), both styles evaluated on the "
+            f"same seed sequence so they meet the same arenas.\n\n"
+        )
+        command = "--style both --no-window"
     header = (
         f"# Arena control-scheme comparison\n\n"
-        f"Generated {generated} by `python -m eval.play_arena --style both --no-window`.\n\n"
-        f"Deterministic policy (`deterministic={DETERMINISTIC}`), both styles evaluated on the "
-        f"same seed sequence so they meet the same arenas.\n\n"
+        f"Generated {generated} by `python -m eval.play_arena {command}`.\n\n"
+        f"{policy_line}"
     )
     columns = (
-        "| Style | Episodes | Return | Phase reached | Phases cleared | Spawners | Enemies "
-        "| Survival | Steps |\n"
-        "|-------|---------:|-------:|--------------:|---------------:|---------:|--------:"
-        "|---------:|------:|\n"
+        "| Style | Policy | Episodes | Return | Phase reached | Phases cleared | Spawners "
+        "| Enemies | Survival | Steps |\n"
+        "|-------|--------|---------:|-------:|--------------:|---------------:|---------:"
+        "|--------:|---------:|------:|\n"
     )
     rows = "".join(
-        f"| `{entry['style']}` | {entry['episodes']} "
+        f"| `{entry['style']}` | `{entry.get('policy', 'ppo')}` | {entry['episodes']} "
         f"| {entry['return_mean']:+.2f} ± {entry['return_std']:.2f} "
         f"| {entry['phase_mean']:.2f} (best {entry['phase_max']}) "
         f"| {entry['phase_cleared_episodes']}/{entry['episodes']} "
@@ -284,6 +394,7 @@ def play(
     models_dir: Path | None = None,
     headless: bool = False,
     max_frames: int | None = None,
+    random_policy: bool = False,
 ) -> dict[str, Any]:
     """Run the env in a window, driven by the agent or by the keyboard.
 
@@ -294,7 +405,10 @@ def play(
 
     from arena.render import ArenaRenderer
 
-    agent = None if human else load_agent(style, algo, models_dir)
+    if human:
+        agent, policy = None, "human"
+    else:
+        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed)
     env = ArenaEnv(control_style=style, render_mode="human")
     renderer = ArenaRenderer(headless=headless)
 
@@ -318,7 +432,13 @@ def play(
                 else:
                     predicted, _ = agent.predict(obs, deterministic=DETERMINISTIC)
                     action = int(predicted)
-                    view = probe(agent, obs, style, action, algo=algo)
+                    # A random policy has no network to read, so the panel is left off rather
+                    # than drawn empty. `probe` would swallow the AttributeError and return None
+                    # anyway; asking it once per frame to fail is not how to express that.
+                    view = (
+                        None if policy == RandomPolicy.name
+                        else probe(agent, obs, style, action, algo=algo)
+                    )
 
                 renderer.draw(env, view)
                 frames += 1
@@ -343,6 +463,7 @@ def play(
 
     return {
         "style": style,
+        "policy": policy,
         "episodes": len(returns),
         "seed": seed,
         "returns": returns,
@@ -360,6 +481,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--human", action="store_true", help="play from the keyboard instead")
+    parser.add_argument("--random", action="store_true",
+                        help="run a uniform random policy: the baseline, and what runs anyway "
+                             "when models/ is empty")
     parser.add_argument("--algo", choices=("ppo", "dqn"), default="ppo")
     parser.add_argument("--no-window", action="store_true",
                         help="skip the window and print the summary only")
@@ -389,8 +513,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         for style in styles:
             if not args.no_window:
-                play(style, episodes=args.episodes, seed=args.seed, algo=args.algo)
-            stats = evaluate(style, episodes=args.episodes, seed=args.seed, algo=args.algo)
+                play(style, episodes=args.episodes, seed=args.seed, algo=args.algo,
+                     random_policy=args.random)
+            stats = evaluate(style, episodes=args.episodes, seed=args.seed, algo=args.algo,
+                             random_policy=args.random)
             measured.append(stats)
             print()
             print(format_summary(stats))
