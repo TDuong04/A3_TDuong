@@ -1,0 +1,612 @@
+{
+  "ticket": "A3-021",
+  "generated": "2026-09-09T10:38:33+00:00",
+  "python": "3.14.6",
+  "obs_dim": 20,
+  "random_steps_per_style": 10000,
+  "episode_trials_per_style": 200,
+  "action_spaces": {
+    "rotation": {
+      "action_space": "Discrete(5)",
+      "n": 5,
+      "expected_n": 5,
+      "passed": true,
+      "rejects_out_of_range": true
+    },
+    "direct": {
+      "action_space": "Discrete(6)",
+      "n": 6,
+      "expected_n": 6,
+      "passed": true,
+      "rejects_out_of_range": true
+    }
+  },
+  "headless": {
+    "sdl_videodriver": "dummy",
+    "returncode": 0,
+    "pygame_imported_by_arena_env": "False",
+    "pygame_imported_after_200_steps": "False",
+    "render_without_render_mode_raises": "True",
+    "stderr": "",
+    "passed": true
+  },
+  "rollouts": {
+    "rotation": {
+      "style": "rotation",
+      "steps": 10000,
+      "episodes_completed": 39,
+      "dtype_float32": true,
+      "shape_ok": true,
+      "all_finite": true,
+      "within_bounds": true,
+      "in_observation_space": true,
+      "features": [
+        {
+          "index": 0,
+          "name": "player_x",
+          "min": -0.9708333611488342,
+          "max": 0.9708333611488342,
+          "mean": 0.10329050642493603,
+          "std": 0.7013459518252935,
+          "distinct": 6415,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 1,
+          "name": "player_y",
+          "min": -0.9588235020637512,
+          "max": 0.9588235020637512,
+          "mean": 0.03299724798746429,
+          "std": 0.7494808377995292,
+          "distinct": 5394,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 2,
+          "name": "player_vx",
+          "min": -0.9999991655349731,
+          "max": 0.9999967217445374,
+          "mean": 0.00069927909130638,
+          "std": 0.37662268979047625,
+          "distinct": 6411,
+          "frac_at_bound": 0.0006
+        },
+        {
+          "index": 3,
+          "name": "player_vy",
+          "min": -0.9999900460243225,
+          "max": 0.9999997019767761,
+          "mean": -0.015245385517348768,
+          "std": 0.318718645638373,
+          "distinct": 5371,
+          "frac_at_bound": 0.0004
+        },
+        {
+          "index": 4,
+          "name": "heading_sin",
+          "min": -0.9999865889549255,
+          "max": 0.9999948143959045,
+          "mean": -0.0067999940790701655,
+          "std": 0.7349481952974963,
+          "distinct": 638,
+          "frac_at_bound": 0.003
+        },
+        {
+          "index": 5,
+          "name": "heading_cos",
+          "min": -0.9999948143959045,
+          "max": 0.9999939799308777,
+          "mean": 0.0409578586129006,
+          "std": 0.676851063668219,
+          "distinct": 638,
+          "frac_at_bound": 0.0017
+        },
+        {
+          "index": 6,
+          "name": "health",
+          "min": 0.20000000298023224,
+          "max": 1.0,
+          "mean": 0.84236000366956,
+          "std": 0.26094755890550847,
+          "distinct": 5,
+          "frac_at_bound": 0.6909
+        },
+        {
+          "index": 7,
+          "name": "phase",
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0,
+          "std": 0.0,
+          "distinct": 1,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 8,
+          "name": "enemy_local_dx",
+          "min": -0.5636300444602966,
+          "max": 0.2556709945201874,
+          "mean": -0.05251872263835101,
+          "std": 0.09855182843803112,
+          "distinct": 7380,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 9,
+          "name": "enemy_local_dy",
+          "min": -0.4610247313976288,
+          "max": 0.505971372127533,
+          "mean": 0.011457478003706768,
+          "std": 0.1229116027758978,
+          "distinct": 7380,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 10,
+          "name": "enemy_distance",
+          "min": 0.0,
+          "max": 0.5925528407096863,
+          "mean": 0.10312536575589613,
+          "std": 0.13066894760623995,
+          "distinct": 7287,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 11,
+          "name": "enemy_local_rel_vx",
+          "min": -0.8295081853866577,
+          "max": 0.374324232339859,
+          "mean": -0.015095049272155847,
+          "std": 0.17887248846185974,
+          "distinct": 6644,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 12,
+          "name": "enemy_local_rel_vy",
+          "min": -0.5633446574211121,
+          "max": 0.6005481481552124,
+          "mean": -0.00045443140841234706,
+          "std": 0.16771955785450093,
+          "distinct": 6643,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 13,
+          "name": "enemy_exists",
+          "min": 0.0,
+          "max": 1.0,
+          "mean": 0.76,
+          "std": 0.4270831300812524,
+          "distinct": 2,
+          "frac_at_bound": 0.76
+        },
+        {
+          "index": 14,
+          "name": "spawner_local_dx",
+          "min": -0.8334238529205322,
+          "max": 0.6092603802680969,
+          "mean": -0.1240000637661633,
+          "std": 0.2211668334409939,
+          "distinct": 8824,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 15,
+          "name": "spawner_local_dy",
+          "min": -0.7327152490615845,
+          "max": 0.7461403012275696,
+          "mean": -0.002593271687203014,
+          "std": 0.30347339087450886,
+          "distinct": 8691,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 16,
+          "name": "spawner_distance",
+          "min": 0.0018380667315796018,
+          "max": 0.8343701362609863,
+          "mean": 0.3566870524300379,
+          "std": 0.17078628295351647,
+          "distinct": 8630,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 17,
+          "name": "shoot_cooldown",
+          "min": 0.0,
+          "max": 0.800000011920929,
+          "mean": 0.22568000504523517,
+          "std": 0.29085484589506355,
+          "distinct": 6,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 18,
+          "name": "enemies_alive",
+          "min": 0.0,
+          "max": 0.699999988079071,
+          "mean": 0.17895000348836185,
+          "std": 0.1576099566018959,
+          "distinct": 14,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 19,
+          "name": "spawners_alive",
+          "min": 0.1666666716337204,
+          "max": 0.3333333432674408,
+          "mean": 0.3227666762858629,
+          "std": 0.04061350471188059,
+          "distinct": 2,
+          "frac_at_bound": 0.0
+        }
+      ]
+    },
+    "direct": {
+      "style": "direct",
+      "steps": 10000,
+      "episodes_completed": 40,
+      "dtype_float32": true,
+      "shape_ok": true,
+      "all_finite": true,
+      "within_bounds": true,
+      "in_observation_space": true,
+      "features": [
+        {
+          "index": 0,
+          "name": "player_x",
+          "min": -0.9708333611488342,
+          "max": 0.9708333611488342,
+          "mean": -0.02498299566623755,
+          "std": 0.5357898704646277,
+          "distinct": 9312,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 1,
+          "name": "player_y",
+          "min": -0.9588235020637512,
+          "max": 0.9588235020637512,
+          "mean": 0.015388371084761548,
+          "std": 0.5949952807361379,
+          "distinct": 9069,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 2,
+          "name": "player_vx",
+          "min": -0.9994524121284485,
+          "max": 0.9619914293289185,
+          "mean": -0.018059574326876465,
+          "std": 0.323192554914075,
+          "distinct": 9235,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 3,
+          "name": "player_vy",
+          "min": -0.9529227018356323,
+          "max": 0.995876133441925,
+          "mean": 0.00818756138156059,
+          "std": 0.306179311055254,
+          "distinct": 8976,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 4,
+          "name": "heading_sin",
+          "min": -1.0,
+          "max": 1.0,
+          "mean": 0.002964796505868458,
+          "std": 0.7028010638870374,
+          "distinct": 45,
+          "frac_at_bound": 0.4906
+        },
+        {
+          "index": 5,
+          "name": "heading_cos",
+          "min": -1.0,
+          "max": 1.0,
+          "mean": -0.004280329840118056,
+          "std": 0.71136738276883,
+          "distinct": 44,
+          "frac_at_bound": 0.5033
+        },
+        {
+          "index": 6,
+          "name": "health",
+          "min": 0.20000000298023224,
+          "max": 1.0,
+          "mean": 0.8295600039348007,
+          "std": 0.2675933567879268,
+          "distinct": 5,
+          "frac_at_bound": 0.6548
+        },
+        {
+          "index": 7,
+          "name": "phase",
+          "min": 0.0,
+          "max": 0.0,
+          "mean": 0.0,
+          "std": 0.0,
+          "distinct": 1,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 8,
+          "name": "enemy_local_dx",
+          "min": -0.4538174867630005,
+          "max": 0.43711039423942566,
+          "mean": -0.00037857038992573493,
+          "std": 0.1007571484964062,
+          "distinct": 7554,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 9,
+          "name": "enemy_local_dy",
+          "min": -0.4516654908657074,
+          "max": 0.4345933198928833,
+          "mean": -0.0021397477020235443,
+          "std": 0.10120593362048678,
+          "distinct": 7554,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 10,
+          "name": "enemy_distance",
+          "min": 0.0,
+          "max": 0.4577735662460327,
+          "mean": 0.09096506310462282,
+          "std": 0.11011232062419615,
+          "distinct": 7553,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 11,
+          "name": "enemy_local_rel_vx",
+          "min": -0.8098717927932739,
+          "max": 0.6095691919326782,
+          "mean": -0.03264051500832338,
+          "std": 0.16847570232719233,
+          "distinct": 7540,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 12,
+          "name": "enemy_local_rel_vy",
+          "min": -0.8072426915168762,
+          "max": 0.6676931977272034,
+          "mean": -0.0028318501256533635,
+          "std": 0.16770076410152923,
+          "distinct": 7540,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 13,
+          "name": "enemy_exists",
+          "min": 0.0,
+          "max": 1.0,
+          "mean": 0.7553,
+          "std": 0.42990918808511175,
+          "distinct": 2,
+          "frac_at_bound": 0.7553
+        },
+        {
+          "index": 14,
+          "name": "spawner_local_dx",
+          "min": -0.7040455937385559,
+          "max": 0.7047988772392273,
+          "mean": 0.0008454041960870086,
+          "std": 0.23795924482276753,
+          "distinct": 9770,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 15,
+          "name": "spawner_local_dy",
+          "min": -0.7033897638320923,
+          "max": 0.7020444273948669,
+          "mean": -0.0010960845993052317,
+          "std": 0.23603318477293184,
+          "distinct": 9606,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 16,
+          "name": "spawner_distance",
+          "min": 0.0059286667965352535,
+          "max": 0.7294955849647522,
+          "mean": 0.30435797097939066,
+          "std": 0.14037239165031268,
+          "distinct": 9954,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 17,
+          "name": "shoot_cooldown",
+          "min": 0.0,
+          "max": 0.800000011920929,
+          "mean": 0.20446000456809998,
+          "std": 0.28473164913597687,
+          "distinct": 6,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 18,
+          "name": "enemies_alive",
+          "min": 0.0,
+          "max": 0.6000000238418579,
+          "mean": 0.14815500237457455,
+          "std": 0.1249033480021057,
+          "distinct": 13,
+          "frac_at_bound": 0.0
+        },
+        {
+          "index": 19,
+          "name": "spawners_alive",
+          "min": 0.1666666716337204,
+          "max": 0.3333333432674408,
+          "mean": 0.3332666765987873,
+          "std": 0.0033326666993078674,
+          "distinct": 2,
+          "frac_at_bound": 0.0
+        }
+      ]
+    }
+  },
+  "feature_classification": {
+    "rotation": {
+      "dead": [
+        "phase"
+      ],
+      "saturated": [
+        "health"
+      ],
+      "saturated_indicators": [
+        "enemy_exists"
+      ]
+    },
+    "direct": {
+      "dead": [
+        "phase"
+      ],
+      "saturated": [
+        "heading_cos",
+        "health"
+      ],
+      "saturated_indicators": [
+        "enemy_exists"
+      ]
+    }
+  },
+  "trained_policy_probe": {
+    "rotation": {
+      "health": {
+        "min": 0.20000000298023224,
+        "max": 1.0,
+        "std": 0.23776248449531337,
+        "moves_under_trained_policy": true
+      },
+      "phase": {
+        "min": 0.0,
+        "max": 0.5,
+        "std": 0.2359952330027028,
+        "moves_under_trained_policy": true
+      }
+    },
+    "direct": {
+      "heading_cos": {
+        "min": -1.0,
+        "max": 1.0,
+        "std": 0.7392256807185218,
+        "moves_under_trained_policy": true
+      },
+      "health": {
+        "min": 0.20000000298023224,
+        "max": 1.0,
+        "std": 0.2121068048817869,
+        "moves_under_trained_policy": true
+      },
+      "phase": {
+        "min": 0.0,
+        "max": 1.0,
+        "std": 0.33011730869495465,
+        "moves_under_trained_policy": true
+      }
+    }
+  },
+  "determinism": {
+    "rotation": {
+      "style": "rotation",
+      "seeds": [
+        {
+          "seed": 0,
+          "steps_compared": 292,
+          "observations_identical": true,
+          "rewards_identical": true
+        },
+        {
+          "seed": 1,
+          "steps_compared": 211,
+          "observations_identical": true,
+          "rewards_identical": true
+        },
+        {
+          "seed": 2,
+          "steps_compared": 270,
+          "observations_identical": true,
+          "rewards_identical": true
+        }
+      ],
+      "passed": true
+    },
+    "direct": {
+      "style": "direct",
+      "seeds": [
+        {
+          "seed": 0,
+          "steps_compared": 300,
+          "observations_identical": true,
+          "rewards_identical": true
+        },
+        {
+          "seed": 1,
+          "steps_compared": 228,
+          "observations_identical": true,
+          "rewards_identical": true
+        },
+        {
+          "seed": 2,
+          "steps_compared": 290,
+          "observations_identical": true,
+          "rewards_identical": true
+        }
+      ],
+      "passed": true
+    }
+  },
+  "terminations": {
+    "rotation": {
+      "style": "rotation",
+      "episodes": 200,
+      "max_episode_steps": 2000,
+      "longest_episode": 528,
+      "mean_episode": 246.875,
+      "shortest_episode": 111,
+      "all_within_cap": true,
+      "terminated_episodes": 200,
+      "truncated_episodes": 0,
+      "both_flags_set": 0,
+      "passed": true
+    },
+    "direct": {
+      "style": "direct",
+      "episodes": 200,
+      "max_episode_steps": 2000,
+      "longest_episode": 480,
+      "mean_episode": 244.77,
+      "shortest_episode": 109,
+      "all_within_cap": true,
+      "terminated_episodes": 200,
+      "truncated_episodes": 0,
+      "both_flags_set": 0,
+      "passed": true
+    }
+  },
+  "throughput": {
+    "rotation": {
+      "style": "rotation",
+      "steps": 50000,
+      "seconds": 0.601,
+      "steps_per_second": 83164.4
+    },
+    "direct": {
+      "style": "direct",
+      "steps": 50000,
+      "seconds": 0.704,
+      "steps_per_second": 71000.4
+    }
+  }
+}

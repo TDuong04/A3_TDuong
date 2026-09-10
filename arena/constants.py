@@ -65,6 +65,6 @@ MAX_EPISODE_STEPS = 2000  # agent steps, not physics frames
 
 # --- Observation ---
 # Fixed-size numeric vector, no pixels (brief requirement). See docs in arena/observation.py.
-OBS_DIM = 21
+OBS_DIM = 20
 MAX_TRACKED_ENEMIES = 1   # observation reports the nearest enemy only
 MAX_TRACKED_SPAWNERS = 1  # ... and the nearest spawner

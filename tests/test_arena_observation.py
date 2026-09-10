@@ -110,7 +110,7 @@ class TestVectorShape:
         obs = build_observation(make_player(), [], [], phase=1)
         assert obs.shape == (OBS_DIM,)
         assert obs.dtype == np.float32
-        assert OBS_DIM == 21
+        assert OBS_DIM == 20
 
     def test_shape_is_identical_however_crowded_the_arena_is(self):
         """Fixed size means fixed size: 40 enemies must not lengthen the vector."""
@@ -120,6 +120,19 @@ class TestVectorShape:
         crowded = build_observation(player, enemies, spawners, phase=2)
         empty = build_observation(player, [], [], phase=1)
         assert crowded.shape == empty.shape == (OBS_DIM,)
+
+    def test_there_is_no_spawner_exists_flag(self):
+        """A dead input is capacity the network pays for and learns nothing from.
+
+        A3-021's validation found `spawner_exists` constant at 1.0 across 20,000 random steps and
+        both trained policies, and the cause is structural, not statistical:
+        `ArenaEnv._maybe_advance_phase()` lays out the next phase in the same frame the last
+        spawner dies, so the flag could never read 0.0. It is gone, and the symmetry with
+        `enemy_exists` at index 13 is not a reason to put it back -- enemies genuinely run out,
+        spawners never do.
+        """
+        assert "spawner_exists" not in FEATURE_NAMES
+        assert "enemy_exists" in FEATURE_NAMES
 
     def test_describe_labels_every_index_once(self):
         names = describe()
@@ -325,7 +338,9 @@ class TestEntitySlots:
         assert obs[IDX["spawner_distance"]] == pytest.approx(
             math.hypot(dx, dy) / DIAGONAL, abs=1e-6
         )
-        assert obs[IDX["spawner_exists"]] == 1.0
+        # There is no spawner-exists flag: it could never read 0. `spawners_alive` carries the
+        # same "is one there" information with a range the network can actually use.
+        assert obs[IDX["spawners_alive"]] > 0.0
 
     def test_enemy_and_spawner_slots_are_independent(self):
         """A copy-paste bug that filled both slots from the same entity would pass a test with one
@@ -411,8 +426,7 @@ class TestEntitySlots:
 class TestAdversarialStates:
     EMPTY_ENEMY_SLOT = ("enemy_local_dx", "enemy_local_dy", "enemy_distance",
                         "enemy_local_rel_vx", "enemy_local_rel_vy", "enemy_exists")
-    EMPTY_SPAWNER_SLOT = ("spawner_local_dx", "spawner_local_dy", "spawner_distance",
-                          "spawner_exists")
+    EMPTY_SPAWNER_SLOT = ("spawner_local_dx", "spawner_local_dy", "spawner_distance")
 
     def test_empty_slots_are_zeroed_and_their_flags_cleared(self):
         obs = build_observation(make_player(), [], [], phase=1)
@@ -445,7 +459,7 @@ class TestAdversarialStates:
         assert obs[IDX["spawner_distance"]] == 0.0
         # The entity is there; only its offset is degenerate, so the flag must stay set.
         assert obs[IDX["enemy_exists"]] == 1.0
-        assert obs[IDX["spawner_exists"]] == 1.0
+        assert obs[IDX["spawners_alive"]] > 0.0
 
     def test_opposite_corners_saturate_the_distance_feature_without_leaving_the_box(self):
         player = make_player(x=0.0, y=0.0)

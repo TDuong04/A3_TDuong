@@ -1,127 +1,134 @@
 {
-  "generated": "2026-09-06",
+  "generated": "2026-09-09",
   "episodes": 30,
   "eval_seed_base": 0,
   "deterministic": true,
-  "note": "Every candidate is the same config/arena.yaml baseline at 400k timesteps, differing only in training seed. Ranked on mean phase reached, then mean episode return - the same ordering the hyperparameter sweep ranks on. The previous models are listed as 'superseded' and were trained before the pipeline recorded run.json, which is why they ship no provenance.",
+  "observation_dim": 20,
+  "note": "Re-run of the seed selection after `spawner_exists` was dropped from the observation, which changed the observation width from 21 to 20 and invalidated every model trained against the old vector. Same protocol as before: every candidate is the config/arena.yaml baseline at 400k timesteps differing only in training seed, ranked on mean phase reached and then mean episode return over 30 deterministic episodes from a fixed seed base. Each winner was retrained under its shipped run name and reproduced its candidate's numbers exactly, so the models in models/ are the runs logged in log_dir. 'superseded' holds the 21-feature model this replaced, measured under the same protocol.",
   "styles": {
     "direct": {
       "shipped": "seed1",
+      "shipped_seed": 1,
       "log_dir": "logs/ppo_direct_shipped",
+      "reproduced_candidate": true,
       "superseded": {
-        "return_mean": 17.139333333333028,
-        "return_std": 19.002798554130955,
-        "phase_mean": 1.9333333333333333,
-        "phase_cleared_episodes": 22,
-        "spawners_mean": 2.6,
-        "enemies_mean": 15.9,
-        "survival_rate": 0.13333333333333333
+        "observation_dim": 21,
+        "return_mean": 26.088666666666583,
+        "return_std": 19.008559604089868,
+        "phase_mean": 2.466666666666667,
+        "phase_cleared_episodes": 29,
+        "spawners_mean": 4.566666666666666,
+        "enemies_mean": 10.866666666666667,
+        "survival_rate": 0.4
       },
       "candidates": {
         "seed0": {
-          "return_mean": 6.692333333333197,
-          "return_std": 11.662149797052214,
-          "phase_mean": 1.5333333333333334,
-          "phase_cleared_episodes": 16,
-          "spawners_mean": 1.2333333333333334,
-          "enemies_mean": 16.7,
-          "survival_rate": 0.0
+          "return_mean": 15.54699999999969,
+          "return_std": 15.557060594255214,
+          "phase_mean": 2.0,
+          "phase_cleared_episodes": 26,
+          "spawners_mean": 2.6666666666666665,
+          "enemies_mean": 14.433333333333334,
+          "survival_rate": 0.06666666666666667
         },
         "seed1": {
-          "return_mean": 26.088666666666583,
-          "return_std": 19.008559604089868,
-          "phase_mean": 2.466666666666667,
-          "phase_cleared_episodes": 29,
-          "spawners_mean": 4.566666666666666,
-          "enemies_mean": 10.866666666666667,
-          "survival_rate": 0.4
-        },
-        "seed2": {
-          "return_mean": 21.768999999999657,
-          "return_std": 19.793258338804907,
-          "phase_mean": 2.4,
-          "phase_cleared_episodes": 27,
-          "spawners_mean": 4.133333333333334,
-          "enemies_mean": 8.733333333333333,
+          "return_mean": 20.573666666666206,
+          "return_std": 16.705306239502285,
+          "phase_mean": 2.3666666666666667,
+          "phase_cleared_episodes": 28,
+          "spawners_mean": 3.933333333333333,
+          "enemies_mean": 8.866666666666667,
           "survival_rate": 0.5333333333333333
         },
+        "seed2": {
+          "return_mean": 4.026333333333196,
+          "return_std": 12.351857210782198,
+          "phase_mean": 1.4666666666666666,
+          "phase_cleared_episodes": 14,
+          "spawners_mean": 1.1333333333333333,
+          "enemies_mean": 13.633333333333333,
+          "survival_rate": 0.03333333333333333
+        },
         "seed3": {
-          "return_mean": 16.01766666666648,
-          "return_std": 14.506019597241483,
-          "phase_mean": 1.8666666666666667,
+          "return_mean": 7.7419999999998454,
+          "return_std": 11.694195825279998,
+          "phase_mean": 1.7,
           "phase_cleared_episodes": 21,
-          "spawners_mean": 2.3333333333333335,
-          "enemies_mean": 17.3,
-          "survival_rate": 0.13333333333333333
+          "spawners_mean": 1.8,
+          "enemies_mean": 12.433333333333334,
+          "survival_rate": 0.06666666666666667
         },
         "seed4": {
-          "return_mean": 2.731666666666624,
-          "return_std": 10.092104862492938,
-          "phase_mean": 1.4,
-          "phase_cleared_episodes": 12,
-          "spawners_mean": 1.1333333333333333,
-          "enemies_mean": 13.033333333333333,
-          "survival_rate": 0.0
+          "return_mean": -7.770333333333335,
+          "return_std": 11.434694714867607,
+          "phase_mean": 1.0,
+          "phase_cleared_episodes": 0,
+          "spawners_mean": 0.26666666666666666,
+          "enemies_mean": 6.4,
+          "survival_rate": 0.06666666666666667
         }
       }
     },
     "rotation": {
       "shipped": "seed0",
+      "shipped_seed": 0,
       "log_dir": "logs/ppo_rotation_shipped",
+      "reproduced_candidate": true,
       "superseded": {
-        "return_mean": -0.5256666666667434,
-        "return_std": 10.730366779482415,
-        "phase_mean": 1.4666666666666666,
-        "phase_cleared_episodes": 14,
-        "spawners_mean": 1.3,
-        "enemies_mean": 6.766666666666667,
-        "survival_rate": 0.13333333333333333
+        "observation_dim": 21,
+        "return_mean": 3.635666666666453,
+        "return_std": 6.97130197468309,
+        "phase_mean": 1.8333333333333333,
+        "phase_cleared_episodes": 25,
+        "spawners_mean": 1.8333333333333333,
+        "enemies_mean": 3.3333333333333335,
+        "survival_rate": 0.03333333333333333
       },
       "candidates": {
         "seed0": {
-          "return_mean": 3.635666666666453,
-          "return_std": 6.97130197468309,
-          "phase_mean": 1.8333333333333333,
-          "phase_cleared_episodes": 25,
-          "spawners_mean": 1.8333333333333333,
-          "enemies_mean": 3.3333333333333335,
-          "survival_rate": 0.03333333333333333
+          "return_mean": 7.586666666666,
+          "return_std": 5.327350394165654,
+          "phase_mean": 1.9333333333333333,
+          "phase_cleared_episodes": 28,
+          "spawners_mean": 2.2666666666666666,
+          "enemies_mean": 5.433333333333334,
+          "survival_rate": 0.2
         },
         "seed1": {
-          "return_mean": 13.248666666666303,
-          "return_std": 21.957332827300974,
-          "phase_mean": 1.6666666666666667,
-          "phase_cleared_episodes": 19,
-          "spawners_mean": 1.9666666666666666,
-          "enemies_mean": 14.3,
-          "survival_rate": 0.23333333333333334
+          "return_mean": -0.6980000000003685,
+          "return_std": 10.611536300962984,
+          "phase_mean": 1.5333333333333334,
+          "phase_cleared_episodes": 16,
+          "spawners_mean": 1.6666666666666667,
+          "enemies_mean": 4.533333333333333,
+          "survival_rate": 0.16666666666666666
         },
         "seed2": {
-          "return_mean": -0.4000000000003408,
-          "return_std": 10.448011613060908,
-          "phase_mean": 1.6333333333333333,
-          "phase_cleared_episodes": 19,
-          "spawners_mean": 1.7666666666666666,
-          "enemies_mean": 5.0,
-          "survival_rate": 0.26666666666666666
+          "return_mean": 1.2466666666667021,
+          "return_std": 13.650014733406804,
+          "phase_mean": 1.2666666666666666,
+          "phase_cleared_episodes": 8,
+          "spawners_mean": 0.9333333333333333,
+          "enemies_mean": 12.233333333333333,
+          "survival_rate": 0.23333333333333334
         },
         "seed3": {
-          "return_mean": 2.2493333333330807,
-          "return_std": 8.519411925453023,
-          "phase_mean": 1.6666666666666667,
-          "phase_cleared_episodes": 20,
-          "spawners_mean": 1.7,
-          "enemies_mean": 5.5,
-          "survival_rate": 0.06666666666666667
+          "return_mean": 5.28999999999961,
+          "return_std": 9.917007613186225,
+          "phase_mean": 1.8333333333333333,
+          "phase_cleared_episodes": 24,
+          "spawners_mean": 2.066666666666667,
+          "enemies_mean": 6.3,
+          "survival_rate": 0.1
         },
         "seed4": {
-          "return_mean": 0.8699999999998096,
-          "return_std": 8.85028662436027,
+          "return_mean": 1.255666666666279,
+          "return_std": 9.37252000383109,
           "phase_mean": 1.6666666666666667,
           "phase_cleared_episodes": 20,
-          "spawners_mean": 1.6666666666666667,
-          "enemies_mean": 3.4,
-          "survival_rate": 0.03333333333333333
+          "spawners_mean": 1.7666666666666666,
+          "enemies_mean": 4.5,
+          "survival_rate": 0.13333333333333333
         }
       }
     }

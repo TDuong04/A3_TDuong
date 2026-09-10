@@ -181,7 +181,7 @@ class PerceptionOverlay:
         self._label(surface, '+y lateral', (x + 110, y + 58), LATERAL)
         markers = []
         for row, (prefix, color) in enumerate((('spawner', SPAWNER_LINK), ('enemy', ENEMY_LINK))):
-            exists = values[f'{prefix}_exists']
+            exists = values['spawners_alive'] > 0 if prefix == 'spawner' else values['enemy_exists']
             self._label(surface, prefix if exists else prefix + ': none',
                         (x + 110, y + 82 + row * 20), color)
             if exists:

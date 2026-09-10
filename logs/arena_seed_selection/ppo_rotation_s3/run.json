@@ -1,8 +1,8 @@
 {
   "control_style": "rotation",
   "policy": "MlpPolicy",
-  "started": "2026-09-06T18:27:14",
-  "git_commit": "66316d1",
+  "started": "2026-09-09T18:12:52",
+  "git_commit": "2a4f6ce",
   "algorithm": "PPO",
   "total_timesteps": 400000,
   "n_envs": 8,
@@ -17,8 +17,8 @@
   ],
   "seed": 3,
   "run_name": "ppo_rotation_s3",
-  "model_path": "/private/tmp/claude-501/-Users-hanhdo-Documents-RMIT-Semester-11-Games-and-AI-Techniques-assignments-A3-A3-TDuong/fdcfc03a-b53b-4ae6-aa9d-9395c30b9301/scratchpad/seed_models/rotation_s3/ppo_rotation.zip",
+  "model_path": "/private/tmp/claude-501/-Users-hanhdo-Documents-RMIT-Semester-11-Games-and-AI-Techniques-assignments-A3-A3-TDuong/000ff3c4-128c-45cf-816e-f893ff5d6e1a/scratchpad/candidate_models2/ppo_rotation_s3/ppo_rotation.zip",
   "ignored_hyperparameters": [],
-  "finished": "2026-09-06T18:27:14",
-  "wall_clock_seconds": 29.1
+  "finished": "2026-09-09T18:12:52",
+  "wall_clock_seconds": 55.6
 }

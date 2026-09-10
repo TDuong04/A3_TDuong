@@ -60,6 +60,7 @@ import pygame
 
 from common.config import load_yaml
 
+from .algorithms import LearningUpdate
 from .constants import ACTION_DELTAS, Action, Tile
 from .env import GridWorld
 from .levels import N_LEVELS
@@ -118,6 +119,9 @@ CONTROLS: tuple[tuple[str, str], ...] = (
     ("P", "policy arrows"),
     ("Q / H", "Q-value heatmap"),
     ("WASD / arrows", "human play"),
+    ("I", "learning debug"),
+    ("V", "episode visits"),
+    ("TAB", "compare view"),
     ("ESC", "quit"),
 )
 
@@ -270,6 +274,8 @@ class GridRenderer:
 
         self.show_policy_arrows = self.config.show_policy_arrows
         self.show_q_values = self.config.show_q_values
+        self.show_debug = False
+        self.show_visits = False
 
         # Fonts are the only pygame subsystem needed off-screen, and font.init() is independent of
         # the video subsystem — so a headless renderer never touches the display at all.
@@ -305,7 +311,18 @@ class GridRenderer:
     def surface_size(self, n_rows: int, n_cols: int) -> tuple[int, int]:
         """Window size for a grid of this shape: HUD strip on top, legend panel on the right."""
         cell = self.config.cell_size
-        return (n_cols * cell + self.legend_width, n_rows * cell + self.hud_height)
+        width = n_cols * cell + self.legend_width
+        height = n_rows * cell + self.hud_height
+        if self.show_debug:
+            width += self.debug_width
+            panel_height = max(620, (self.font_small.get_height() + 8) * 22
+                               + self.font_title.get_height() + 32)
+            height = max(height, self.hud_height + panel_height)
+        return (width, height)
+
+    @property
+    def debug_width(self) -> int:
+        return max(600, self.font_small.size("0" * 86)[0] + 24)
 
     def _cell_rect(self, row: int, col: int) -> pygame.Rect:
         cell = self.config.cell_size
@@ -419,6 +436,8 @@ class GridRenderer:
         self._draw_floor(surface, env)
         if self.show_q_values:
             self._draw_q_heatmap(surface, env, q_table)
+        if self.show_visits:
+            self._draw_visits(surface, env, (status or {}).get("cell_visits", {}))
         self._draw_items(surface, env)
         self._draw_grid_lines(surface, env)
         if self.show_policy_arrows:
@@ -427,6 +446,8 @@ class GridRenderer:
         self._draw_agent(surface, env)
         self._draw_hud(surface, env, status or {})
         self._draw_legend(surface, env, status or {})
+        if self.show_debug:
+            self._draw_debug(surface, env, (status or {}).get("learning_update"))
         return surface
 
     def _draw_floor(self, surface: pygame.Surface, env: GridWorld) -> None:
@@ -705,6 +726,8 @@ class GridRenderer:
         for name, on in (
             ("policy arrows", self.show_policy_arrows),
             ("Q heatmap", self.show_q_values),
+            ("learning debug", self.show_debug),
+            ("episode visits", self.show_visits),
         ):
             color = COLOR_APPLE if on else COLOR_TEXT_DIM
             label = self.font_small.render(f"{name}: {'on' if on else 'off'}", True, color)
@@ -718,6 +741,77 @@ class GridRenderer:
                 label = self.font_small.render(line, True, COLOR_TEXT)
                 surface.blit(label, (x, y))
                 y += label.get_height() + 2
+
+    def _draw_visits(self, surface: pygame.Surface, env: GridWorld,
+                     counts: Mapping[Coord, int]) -> None:
+        peak = max(counts.values(), default=1)
+        for (row, col), count in counts.items():
+            rect = self._cell_rect(row, col)
+            tint = pygame.Surface(rect.size, pygame.SRCALPHA)
+            tint.fill((55, 170, 240, int(50 + 140 * count / peak)))
+            surface.blit(tint, rect)
+            label = self.font_small.render(str(count), True, COLOR_TEXT)
+            surface.blit(label, (rect.left + 2, rect.top + 2))
+
+    @staticmethod
+    def debug_lines(update: LearningUpdate | None) -> tuple[str, ...]:
+        if update is None:
+            return ("No learning update yet.",
+                    "Use --learn for real updates; SPACE pauses, N steps.",
+                    "Frozen-policy playback does not update Q values.")
+        u = update
+        term = ("max_a' Q(s',a')" if u.algorithm == "q"
+                else "Q(s', a'_chosen)")
+        branch = "exploratory" if u.selection.exploratory else "greedy"
+        relation = "<" if u.selection.exploratory else ">="
+        lines = [
+            f"Algorithm: {'Q-learning (off-policy)' if u.algorithm == 'q' else 'SARSA (on-policy)'}",
+            f"s = {u.state}",
+            f"a = {Action(u.action).name} ({u.action})   r_env = {u.reward:+.6g}",
+            f"s' = {u.next_state}",
+            f"epsilon = {u.epsilon:.6g}   alpha = {u.alpha:.6g}   gamma = {u.gamma:.6g}",
+            f"roll = {u.selection.roll:.9g} {relation} epsilon: {branch} branch",
+            "Exploration can still select a greedy action.",
+            f"Q(s,a) before = {u.q_before:+.9g}",
+        ]
+        if u.terminated:
+            lines.append(f"{term}: not used (terminal); bootstrap = 0")
+        else:
+            lines.append(f"{term} = {u.bootstrap:+.9g}")
+            if u.next_action is not None:
+                lines.append(f"a'_chosen = {Action(u.next_action).name} ({u.next_action})")
+        lines.extend((
+            f"TD target = {u.shaped_reward:+.9g} + {u.gamma:.6g} * {u.bootstrap:+.9g} = {u.target:+.9g}",
+            f"TD error = target - Q_before = {u.error:+.9g}",
+            f"Q_after = Q_before + alpha * TD error = {u.q_after:+.9g}",
+            f"terminated = {u.terminated}   truncated = {u.truncated}",
+        ))
+        if u.intrinsic_strength:
+            lines.extend((
+                f"Arrival state's prior n(s') = {u.prior_visits} (full state)",
+                f"r_i = strength / sqrt(n(s')+1) = {u.intrinsic_strength:g} / sqrt({u.prior_visits}+1)",
+                f"Intrinsic reward r_i = {u.intrinsic_bonus:+.9g}",
+                f"Environment reward = {u.reward:+.9g}",
+                f"Shaped reward = r_env + r_i = {u.shaped_reward:+.9g}",
+            ))
+        lines.append("Visit heatmap: cell occupancies this episode (includes start).")
+        return tuple(lines)
+
+    def _draw_debug(self, surface: pygame.Surface, env: GridWorld,
+                    update: LearningUpdate | None) -> None:
+        left = env.n_cols * self.config.cell_size + self.legend_width
+        panel = pygame.Rect(left, self.hud_height, self.debug_width,
+                            surface.get_height() - self.hud_height)
+        pygame.draw.rect(surface, COLOR_PANEL, panel)
+        pygame.draw.line(surface, COLOR_GRID_LINE, panel.topleft, panel.bottomleft)
+        x, y = left + 12, panel.top + 10
+        title = self.font_title.render("Latest learning update", True, COLOR_ACCENT)
+        surface.blit(title, (x, y))
+        y += title.get_height() + 12
+        for line in self.debug_lines(update):
+            label = self.font_small.render(line, True, COLOR_TEXT)
+            surface.blit(label, (x, y))
+            y += label.get_height() + 8
 
     def _draw_learner_block(
         self, surface: pygame.Surface, learner: LearnerInfo, x: int, y: int
@@ -807,6 +901,7 @@ class PlaybackApp:
         self.running = True
         self.message = ""
         self._accumulator = 0.0
+        self.cell_visits = {self.env.state[:2]: 1}
         self.renderer.sync(self.env, animate=False)
         self._apply_speed()
 
@@ -833,6 +928,7 @@ class PlaybackApp:
             "steps_per_second": self.steps_per_second,
             "message": self.message,
             "learner": self.learner,
+            "cell_visits": self.cell_visits,
         }
 
     def _apply_speed(self) -> None:
@@ -850,6 +946,8 @@ class PlaybackApp:
             self.message = "episode over — press R to reset"
             return
         self.env.step(action)
+        cell = self.env.state[:2]
+        self.cell_visits[cell] = self.cell_visits.get(cell, 0) + 1
         self.renderer.sync(self.env)
         if self.env.done:
             self.message = "episode over — press R to reset"
@@ -862,6 +960,7 @@ class PlaybackApp:
 
     def reset(self) -> None:
         self.env.reset(seed=self.seed)
+        self.cell_visits = {self.env.state[:2]: 1}
         self.renderer.sync(self.env, animate=False)
         self.message = ""
         self._accumulator = 0.0
@@ -870,6 +969,7 @@ class PlaybackApp:
         if not 0 <= level < N_LEVELS:
             return
         self.env = GridWorld(level_index=level, seed=self.seed)
+        self.cell_visits = {self.env.state[:2]: 1}
         self.renderer.sync(self.env, animate=False)
         self.message = f"level {level}"
         self._accumulator = 0.0
@@ -911,6 +1011,10 @@ class PlaybackApp:
             self.renderer.toggle_policy_arrows()
         elif key in (pygame.K_q, pygame.K_h):
             self.renderer.toggle_q_values()
+        elif key == pygame.K_i:
+            self.renderer.show_debug = not self.renderer.show_debug
+        elif key == pygame.K_v:
+            self.renderer.show_visits = not self.renderer.show_visits
         elif key in HUMAN_KEYS:
             # A direction key is always a human move; in policy mode it also pauses playback so the
             # human and the policy cannot fight over the same env.

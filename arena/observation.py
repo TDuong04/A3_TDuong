@@ -1,6 +1,6 @@
 """Observation vector — the fixed-size numeric view the deep RL agent trains on.
 
-Fixed-size numeric vector of `OBS_DIM` (21) float32 values. No pixels, no screenshots — the brief
+Fixed-size numeric vector of `OBS_DIM` (20) float32 values. No pixels, no screenshots — the brief
 forbids them and the rubric checks for a numeric feature vector.
 
 Layout:
@@ -17,10 +17,17 @@ Layout:
     13   nearest enemy exists flag                        0.0 or 1.0
     14-15 nearest spawner dx, dy IN SHIP-LOCAL FRAME      / arena diagonal
     16   nearest spawner distance                         / arena diagonal
-    17   nearest spawner exists flag                      0.0 or 1.0
-    18   shoot cooldown remaining                         / cooldown duration
-    19   enemies alive                                    / a fixed cap
-    20   spawners alive                                   / a fixed cap
+    17   shoot cooldown remaining                         / cooldown duration
+    18   enemies alive                                    / a fixed cap
+    19   spawners alive                                   / a fixed cap
+
+There is deliberately no "spawner exists" flag to match the enemy one at index 13. A3-021's
+validation found it constant at 1.0 across 20,000 random steps and both trained policies, and the
+cause is structural rather than statistical: `ArenaEnv._maybe_advance_phase()` lays out the next
+phase's spawners in the same frame the last one is destroyed, so no observation is ever built from
+a world with an empty spawner list. The flag could not read 0.0, and an input that cannot vary is
+capacity the network pays for and learns nothing from. `spawners_alive` at index 19 already carries
+the live count, which is the same information with a range.
 
 Three rules that decide whether this trains at all:
 
@@ -94,7 +101,6 @@ FEATURE_NAMES: tuple[str, ...] = (
     "spawner_local_dx",
     "spawner_local_dy",
     "spawner_distance",
-    "spawner_exists",
     "shoot_cooldown",
     "enemies_alive",
     "spawners_alive",
@@ -199,8 +205,8 @@ def build_observation(
     live_enemies = [enemy for enemy in enemies if enemy.alive]
     live_spawners = [spawner for spawner in spawners if spawner.alive]
 
-    # Slots 8-13 and 14-17 keep the zeros allocated above whenever the slot is empty, which clears
-    # the flag and wipes the previous frame's values in one move.
+    # Slots 8-13 and 14-16 keep the zeros allocated above whenever the slot is empty, which clears
+    # the enemy flag and wipes the previous frame's values in one move.
     enemy = nearest_alive(player, live_enemies)
     if enemy is not None:
         dx, dy = enemy.x - player.x, enemy.y - player.y
@@ -220,11 +226,10 @@ def build_observation(
         obs[14] = local_x / scales.diagonal
         obs[15] = local_y / scales.diagonal
         obs[16] = math.hypot(dx, dy) / scales.diagonal
-        obs[17] = 1.0
 
-    obs[18] = player.shoot_cooldown_remaining / config.shoot_cooldown
-    obs[19] = len(live_enemies) / scales.enemy_count_cap
-    obs[20] = len(live_spawners) / scales.spawner_count_cap
+    obs[17] = player.shoot_cooldown_remaining / config.shoot_cooldown
+    obs[18] = len(live_enemies) / scales.enemy_count_cap
+    obs[19] = len(live_spawners) / scales.spawner_count_cap
 
     # The clip is a guarantee, not a correction: every feature above is already scaled to land
     # inside the box, and it only bites on the saturating counts.

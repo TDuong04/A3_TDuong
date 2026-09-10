@@ -77,6 +77,8 @@ python -m train.sweep_arena --report-only --promote    # re-measure the head-to-
 # Part II — playback
 python -m eval.play_arena --style rotation
 python -m eval.play_arena --style direct --human       # G: play the same env from the keyboard
+python -m eval.play_arena --style direct --random      # the chance-level baseline; also what runs
+                                                       # by itself when models/ is still empty
 python -m eval.play_arena --style both --no-window     # R6: writes results/arena_eval/
 tensorboard --logdir logs
 ```
@@ -99,14 +101,40 @@ The project is marked partly from a live demo, so both windows are driveable fro
 | `0`–`6`         | switch level — every level's trained table is loaded, not just the one requested |
 | `P`             | greedy policy arrows                                                             |
 | `Q` / `H`       | per-cell Q-value heatmap                                                         |
+| `I`             | latest real learning update panel                                               |
+| `V`             | episode visit-count heatmap (separate from Q values)                             |
+| `TAB`           | comparison view: both panels → Q-learning → SARSA → both                        |
 | arrows / `WASD` | take the move yourself; playback pauses so you and the policy cannot fight       |
 | `ESC`           | quit                                                                             |
+
+To demonstrate the learning math, start an opt-in live session (fresh in-memory tables,
+no saved artefacts modified):
+
+```bash
+python -m eval.play_gridworld --learn --level 1 --compare --env-seed 0 --policy-seed 0
+python -m eval.play_gridworld --learn --level 6 --algo sarsa --intrinsic-strength 0.5
+```
+
+Live sessions start paused with the debug panel open. Press `N` for one actual update,
+`SPACE` to run/pause, and `V` to show episode cell visits. `TAB` selects a comparison
+panel while both learners keep stepping together. `R` starts the next learning episode,
+retaining Q values and advancing the configured epsilon schedule; switching levels clears
+the latest update and counts and starts that level's schedule while retaining its in-memory
+table. A paused terminal frame stays visible until resumed or reset.
+
+The panel captures the epsilon roll and selection branch, Q before/after, and the actual
+TD target/error. SARSA shows the successor action it carries into the following step;
+Q-learning shows the maximum successor value. Termination zeros the bootstrap;
+truncation retains it. On level 6, the intrinsic bonus uses the full arrival state's
+**pre-arrival** count; the spatial heatmap aggregates cell occupancies including the start.
+Human moves clear the update panel because they do not perform learning updates.
+Ordinary playback remains frozen-table evaluation and cannot show historical learning math.
 
 **Arena** (`eval/play_arena.py`)
 
 | Key             | Does                                                          |
 | --------------- | ------------------------------------------------------------- |
-| `O` / `TAB`     | observation overlay — all 21 features, live                   |
+| `O` / `TAB`     | observation overlay — all 20 features, live                   |
 | `V`             | policy overlay — action probabilities and `V(s)`              |
 | arrows / `WASD` | human play: move (`direct`) or rotate and thrust (`rotation`) |
 | `SPACE`         | human play: shoot                                             |
@@ -123,7 +151,7 @@ window.
 | Gridworld **Learner** panel                 | algorithm name, alpha, gamma, the epsilon schedule and the episode budget that trained the policy on screen — read from the run's own summary, never from the config |
 | Gridworld overlays                          | greedy policy arrows (`P`), per-cell Q-value heatmap (`Q` / `H`)                                                                                                     |
 | Arena HUD                                   | phase, health, score, step, current action, control style                                                                                                            |
-| Arena **observation** overlay (`O` / `TAB`) | all 21 features live, plus lines to the nearest enemy and spawner and the ship-local heading                                                                         |
+| Arena **observation** overlay (`O` / `TAB`) | all 20 features live, plus lines to the nearest enemy and spawner and the ship-local heading                                                                         |
 | Arena **policy** overlay (`V`)              | the action probability the network assigned to every action, the one it chose, and the critic's `V(s)`                                                               |
 
 In `--compare` mode the two gridworld panels each carry their own Learner block, so "Q-learning and
@@ -142,6 +170,8 @@ cite these in the report rather than re-deriving numbers by hand.
 | [`results/intrinsic_level6_q.md`](results/intrinsic_level6_q.md)           | row F: the count-based bonus swept over five strengths and five seeds — an honest negative result                                             |
 | [`results/arena_sweep/sweep_table.md`](results/arena_sweep/sweep_table.md) | row J3: the hyperparameter sweep, one axis at a time, confirmed across seeds, with a reward-hacking flag                                      |
 | [`results/arena_eval/comparison.md`](results/arena_eval/comparison.md)     | row I: the two control schemes measured head-to-head on the same seeded arenas                                                                |
+| [`results/arena_validation/validation.md`](results/arena_validation/validation.md) | row H: the observation vector stress-tested — per-feature ranges, dead/saturated features by name, determinism, termination and steps/second   |
+| [`results/arena_eval/comparison_random.md`](results/arena_eval/comparison_random.md) | row I: the same 30 seeded arenas under a uniform random policy — the baseline that makes "clears 28 of 30" mean something                       |
 | [`docs/evaluations/`](docs/evaluations/)                                   | dated whole-project audits against the rubric, each pinned to the commit it measured                                                          |
 
 `results/` also holds the training curves, policy figures, per-run summaries, episode histories and

@@ -23,7 +23,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 import pygame  # noqa: E402  (must follow the driver assignment above)
 import torch  # noqa: E402
 
-from arena.constants import DirectAction, RotationAction  # noqa: E402
+from arena.constants import OBS_DIM, DirectAction, RotationAction  # noqa: E402
 from arena.env import ArenaEnv  # noqa: E402
 from arena.policy_view import PolicyView, action_names, probe  # noqa: E402
 from arena.render import (  # noqa: E402
@@ -74,7 +74,7 @@ class _StubDQN:
         self.q_net = _StubQNet(q_values)
 
 
-OBSERVATION = np.zeros(21, dtype=np.float32)
+OBSERVATION = np.zeros(OBS_DIM, dtype=np.float32)
 
 
 # --- action names ---------------------------------------------------------------------------

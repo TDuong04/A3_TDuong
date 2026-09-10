@@ -7,7 +7,7 @@ completed A3-009 and A3-012 implementation now on main.
 | Area | Integration decision |
 | --- | --- |
 | Renderer | Keep main's coordinate mapping, HUD, health bars, phase banners and window lifecycle. |
-| Observation | Keep O/TAB and the full 21-feature panel; add a compact pilot-perception compass. |
+| Observation | Keep O/TAB and the full 20-feature panel; add a compact pilot-perception compass. |
 | Policy | Keep V, action probabilities/Q-values, chosen action and critic value. |
 | Human/evaluation | Reuse main's keyboard mapping, seeded episodes, trained model loading and result export. |
 | Combat | Reuse A3-018's bounded renderer-owned flashes, hit rings, particles and shake. E toggles these added effects. |
