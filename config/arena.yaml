@@ -102,3 +102,28 @@ evaluation:
   fps: 60
   show_observation_overlay: true  # the debug overlay; doubles as report figure and video moment
   show_policy_overlay: true       # action probabilities and V(s): the algorithm, on screen
+
+# Renderer-only feedback. These values never enter physics, rewards, or observations.
+visual_feedback:
+  muzzle_seconds: 0.10
+  hit_seconds: 0.24
+  explosion_seconds: 0.55
+  shake_seconds: 0.20
+  shake_pixels: 4
+  particle_speed: 95
+  particle_count: 12
+  max_events: 32
+
+# Enabled together by --mechanics in training and playback; baseline remains reproducible.
+mechanics:
+  pickup_lifetime: 10.0
+  pickup_radius: 12
+  elite_first_phase: 2
+  elite_health: 6
+  elite_radius: 20
+  elite_speed: 65
+  pursuit_seconds: 2.0
+  windup_seconds: 0.8
+  charge_seconds: 0.5
+  recovery_seconds: 1.0
+  charge_speed: 420

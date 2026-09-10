@@ -13,7 +13,7 @@ raise, update or close a ticket, or edit the ticket file and re-run the script.
 | [A3-014](A3-014-write-the-report.md) | P0 | task | Write the report _(blocked by A3-007, A3-012)_ | R | 2.5 | report | unassigned | [#14](https://github.com/TDuong04/A3_TDuong/issues/14) |
 | [A3-015](A3-015-record-and-edit-the-video-demonstration.md) | P0 | task | Record and edit the video demonstration _(blocked by A3-012, A3-002)_ | V | 5 | video | unassigned | [#15](https://github.com/TDuong04/A3_TDuong/issues/15) |
 | [A3-017](A3-017-decide-ownership-and-fill-in-the.md) | P1 | chore | Decide ownership and fill in the team table | R | 2.5 | infra | unassigned | [#17](https://github.com/TDuong04/A3_TDuong/issues/17) |
-| [A3-018](A3-018-ship-creativity-features-beyond-the-brief.md) | P2 | feature | Ship creativity features beyond the brief _(blocked by A3-009)_ | Creativity | 5 | arena | unassigned | [#18](https://github.com/TDuong04/A3_TDuong/issues/18) |
+| [A3-018](A3-018-ship-creativity-features-beyond-the-brief.md) | P1 | feature | Ship creativity features beyond the brief _(blocked by A3-014)_ | Creativity | 5 | arena | unassigned | [#18](https://github.com/TDuong04/A3_TDuong/issues/18) |
 
 ## In progress
 

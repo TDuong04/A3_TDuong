@@ -261,3 +261,17 @@ discover and looks exactly like a hyperparameter problem while you are discoveri
    [A3-015](docs/tickets/A3-015-record-and-edit-the-video-demonstration.md),
    [A3-017](docs/tickets/A3-017-decide-ownership-and-fill-in-the.md),
    [A3-018](docs/tickets/A3-018-ship-creativity-features-beyond-the-brief.md).
+
+
+### Optional shield pickups and elite chargers (A3-018)
+
+```sh
+python -m eval.play_arena --human --style direct --mechanics --seed 0
+python -m eval.play_arena --human --style rotation --mechanics --seed 0
+```
+
+Destroy spawners to drop shield orbs; collect one to absorb a hit. From phase 2, dodge the
+elite's telegraphed charge and defeat it to finish the phase. Both mechanics use the existing
+actions. Train new 36-feature policies with
+`python -m train.train_arena --style direct --mechanics` (repeat for rotation); they save under `models/mechanics/`. Omitting `--mechanics`
+keeps the baseline and existing checkpoints. See [mechanics rules and testing](docs/arena-mechanics.md).

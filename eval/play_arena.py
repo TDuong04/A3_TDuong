@@ -93,7 +93,8 @@ def model_path(style: str, algo: str = "ppo") -> Path:
     return MODELS_DIR / f"{algo}_{style}.zip"
 
 
-def resolve_model(style: str, algo: str = "ppo", models_dir: Path | None = None) -> Path:
+def resolve_model(style: str, algo: str = "ppo", models_dir: Path | None = None,
+                  *, mechanics: bool = False) -> Path:
     """The saved model for a style, or an error naming the command that would produce it."""
     directory = Path(models_dir) if models_dir is not None else MODELS_DIR
     path = directory / f"{algo}_{style}.zip"
@@ -105,14 +106,16 @@ def resolve_model(style: str, algo: str = "ppo", models_dir: Path | None = None)
         f"Looked for {path}.\n"
         f"Models present: {', '.join(existing) if existing else '(none)'}\n"
         f"Train it first:\n    python -m train.train_arena --style {style}"
+        + (" --mechanics" if mechanics else "")
     )
 
 
-def load_agent(style: str, algo: str = "ppo", models_dir: Path | None = None):
+def load_agent(style: str, algo: str = "ppo", models_dir: Path | None = None,
+               *, mechanics: bool = False):
     """Load the SB3 policy. Imported lazily so `--human` needs no torch and no model on disk."""
     from stable_baselines3 import DQN, PPO
 
-    path = resolve_model(style, algo, models_dir)
+    path = resolve_model(style, algo, models_dir, mechanics=mechanics)
     loader = {"ppo": PPO, "dqn": DQN}[algo]
     return loader.load(path, device="cpu")
 
@@ -135,6 +138,7 @@ def load_policy(
     *,
     random: bool = False,
     seed: int = 0,
+    mechanics: bool = False,
 ) -> tuple[Any, str]:
     """The policy to run, and the name to record it under.
 
@@ -151,14 +155,29 @@ def load_policy(
         directory = Path(models_dir) if models_dir is not None else MODELS_DIR
         print(
             f"No trained models in {_reportable(directory)} -- running a random policy.\n"
-            f"Train one with:\n    python -m train.train_arena --style {style}",
+            f"Train one with:\n    python -m train.train_arena --style {style}"
+            + (" --mechanics" if mechanics else ""),
             file=sys.stderr,
         )
         return RandomPolicy(N_ACTIONS[style], seed=seed), RandomPolicy.name
+    if mechanics:
+        return load_agent(style, algo, models_dir, mechanics=True), algo
     return load_agent(style, algo, models_dir), algo
 
 
 # --- headless evaluation --------------------------------------------------------------------------
+
+
+def validate_policy_space(agent, env):
+    """Fail early instead of feeding an incompatible checkpoint a different feature vector."""
+    observation_space = getattr(agent, "observation_space", None)
+    action_space = getattr(agent, "action_space", None)
+    if ((observation_space is not None and observation_space.shape != env.observation_space.shape)
+            or (action_space is not None and action_space.n != env.action_space.n)):
+        env.close()
+        raise ArenaEvalError("Model spaces do not match this arena. Train with the same "
+                             "control style and --mechanics setting used for playback.")
+
 
 
 def evaluate(
@@ -170,6 +189,7 @@ def evaluate(
     models_dir: Path | None = None,
     agent: Any | None = None,
     random_policy: bool = False,
+    mechanics: bool = False,
 ) -> dict[str, Any]:
     """Run `episodes` seeded episodes with no window and return the numbers the report needs.
 
@@ -179,20 +199,24 @@ def evaluate(
     """
     if style not in STYLES:
         raise ValueError(f"unknown control style {style!r}; expected one of {STYLES}")
+    if mechanics:
+        models_dir = (Path(models_dir) if models_dir is not None else MODELS_DIR) / "mechanics"
     if agent is None:
-        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed)
+        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed, mechanics=mechanics)
     else:
         # An injected agent names itself if it can. That is how a `RandomPolicy` handed in
         # directly still labels its own output, rather than being filed under `ppo`.
         policy = str(getattr(agent, "name", algo))
 
-    env = ArenaEnv(control_style=style, render_mode=None)
+    env = ArenaEnv(control_style=style, render_mode=None, mechanics=mechanics)
+    validate_policy_space(agent, env)
     returns: list[float] = []
     phases: list[int] = []
     spawners: list[int] = []
     kills: list[int] = []
     steps: list[int] = []
     survived: list[bool] = []
+    mechanic_metrics = {key: [] for key in ("pickups_collected", "shield_blocks", "elites_killed")}
 
     for episode in range(episodes):
         obs, _ = env.reset(seed=seed + episode)
@@ -208,18 +232,22 @@ def evaluate(
         kills.append(int(info.get("enemies_killed", 0)))
         steps.append(int(env.steps))
         survived.append(not terminated)
+        for key, values in mechanic_metrics.items():
+            values.append(info.get(key, 0))
     env.close()
 
     def mean(values: list[Any]) -> float:
         return float(statistics.fmean(values)) if values else 0.0
 
     return {
+        "mechanics": mechanics,
         "style": style,
         # Carried into every filename, summary and table below: a random baseline that reads as a
         # trained result is the one way this script can actively mislead the report.
         "policy": policy,
         "episodes": episodes,
         "seed": seed,
+        **{key + "_mean": mean(values) for key, values in mechanic_metrics.items()},
         "return_mean": mean(returns),
         "return_std": float(statistics.pstdev(returns)) if len(returns) > 1 else 0.0,
         "phase_mean": mean(phases),
@@ -240,6 +268,7 @@ def format_summary(stats: dict[str, Any]) -> str:
     return "\n".join(
         (
             f"style              {stats['style']}",
+            f"rules              {'shield + elite' if stats.get('mechanics') else 'baseline'}",
             f"policy             {stats.get('policy', 'ppo')}",
             f"episodes           {stats['episodes']} (seeds {stats['seed']}"
             f"-{stats['seed'] + stats['episodes'] - 1})",
@@ -277,6 +306,11 @@ def write_results(
     the comparison table itself, ready to lift.
     """
     directory = Path(results_dir) if results_dir is not None else RESULTS_DIR
+    modes = {entry.get("mechanics", False) for entry in stats}
+    if len(modes) > 1:
+        raise ValueError("Compare control styles under the same mechanics setting")
+    if True in modes:
+        directory = directory / "mechanics"
     directory.mkdir(parents=True, exist_ok=True)
     generated = datetime.now(UTC).isoformat(timespec="seconds")
 
@@ -323,6 +357,9 @@ def format_comparison_markdown(stats: list[dict[str, Any]], generated: str) -> s
             f"same seed sequence so they meet the same arenas.\n\n"
         )
         command = "--style both --no-window"
+    if any(entry.get("mechanics") for entry in stats):
+        command += " --mechanics"
+        policy_line += "Rules: shield pickups and elite chargers.\n\n"
     header = (
         f"# Arena control-scheme comparison\n\n"
         f"Generated {generated} by `python -m eval.play_arena {command}`.\n\n"
@@ -395,6 +432,7 @@ def play(
     headless: bool = False,
     max_frames: int | None = None,
     random_policy: bool = False,
+    mechanics: bool = False,
 ) -> dict[str, Any]:
     """Run the env in a window, driven by the agent or by the keyboard.
 
@@ -405,11 +443,14 @@ def play(
 
     from arena.render import ArenaRenderer
 
+    if mechanics:
+        models_dir = (Path(models_dir) if models_dir is not None else MODELS_DIR) / "mechanics"
     if human:
         agent, policy = None, "human"
     else:
-        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed)
-    env = ArenaEnv(control_style=style, render_mode="human")
+        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed, mechanics=mechanics)
+    env = ArenaEnv(control_style=style, render_mode="human", mechanics=mechanics)
+    validate_policy_space(agent, env)
     renderer = ArenaRenderer(headless=headless)
 
     returns: list[float] = []
@@ -448,7 +489,7 @@ def play(
                     raise KeyboardInterrupt
 
                 if human:
-                    action = human_action(pygame.key.get_pressed(), style)
+                    action = 0 if headless else human_action(pygame.key.get_pressed(), style)
 
                 obs, _, terminated, truncated, info = env.step(action)
                 done = terminated or truncated
@@ -462,6 +503,7 @@ def play(
         env.close()
 
     return {
+        "mechanics": mechanics,
         "style": style,
         "policy": policy,
         "episodes": len(returns),
@@ -480,6 +522,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--style", choices=(*STYLES, "both"), default="direct")
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--mechanics", action="store_true",
+                        help="enable shields and elites; use models/mechanics")
+    parser.add_argument("--headless", action="store_true", help="render offscreen")
+    parser.add_argument("--frames", type=int, default=None, help="limit playback frames")
+    parser.add_argument("--models-dir", type=Path, default=None)
     parser.add_argument("--human", action="store_true", help="play from the keyboard instead")
     parser.add_argument("--random", action="store_true",
                         help="run a uniform random policy: the baseline, and what runs anyway "
@@ -505,8 +552,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         controls = ("WASD / arrows to steer, SPACE to shoot" if args.style == "rotation"
                     else "WASD / arrows to move, SPACE to shoot")
-        print(f"human play, style {args.style}: {controls}. O toggles the overlay, ESC quits.")
-        play(args.style, episodes=args.episodes, seed=args.seed, human=True)
+        print(f"human play, style {args.style}: {controls}. O toggles observation, V policy, E effects, ESC quits.")
+        play(args.style, episodes=args.episodes, seed=args.seed, human=True,
+             mechanics=args.mechanics, headless=args.headless, max_frames=args.frames)
         return 0
 
     measured: list[dict[str, Any]] = []
@@ -514,9 +562,10 @@ def main(argv: list[str] | None = None) -> int:
         for style in styles:
             if not args.no_window:
                 play(style, episodes=args.episodes, seed=args.seed, algo=args.algo,
-                     random_policy=args.random)
+                     headless=args.headless, max_frames=args.frames,
+                     random_policy=args.random, models_dir=args.models_dir, mechanics=args.mechanics)
             stats = evaluate(style, episodes=args.episodes, seed=args.seed, algo=args.algo,
-                             random_policy=args.random)
+                             random_policy=args.random, models_dir=args.models_dir, mechanics=args.mechanics)
             measured.append(stats)
             print()
             print(format_summary(stats))
