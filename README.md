@@ -136,7 +136,44 @@ Ordinary playback remains frozen-table evaluation and cannot show historical lea
 | `V`             | policy overlay — action probabilities and `V(s)`              |
 | arrows / `WASD` | human play: move (`direct`) or rotate and thrust (`rotation`) |
 | `SPACE`         | human play: shoot                                             |
+| `E`             | visual effects                                                |
+| `F3`            | reward and physics debug (Fn+F3 on some Macs)                  |
+| `P`             | pause / resume playback                                      |
+| `N`             | one agent step, then remain paused                           |
+| `R`             | reset episode and clear debug snapshots / reward totals      |
 | `ESC`           | quit                                                          |
+
+Arena debugging uses the existing playback script:
+
+```bash
+python -m eval.play_arena --style direct --debug --paused --no-save
+python -m eval.play_arena --style rotation --random --debug --paused --no-save
+python -m eval.play_arena --style direct --human --debug
+```
+
+`N` captures one completed transition. Policy bars and PPO's `V(s)` describe the
+observation **before** that action; the arena and observation overlay show the resulting
+state. Rewards alongside the policy are from that same transition. Repeated paused
+frames never select another action or add to episode totals. Terminal frames remain
+held while paused; `R` resets, or `P` resumes episode progression. Human `SPACE` still shoots.
+
+F3 adds collision circles, enemy-to-player target lines and spawner countdowns in
+seconds, plus per-step and cumulative reward contributions. Damage is charged per
+accepted hit, not per lost health point, and the step penalty is charged once per
+agent step (three physics frames). A3-018 effects and observation controls remain available.
+
+An empty model directory falls back to a seeded random policy, explicitly labelled
+on screen. If other models exist but the requested model is missing, playback reports
+the training command. `--random` always forces a baseline; its saved results have separate
+filenames from trained results. Random/human modes show no invented policy probabilities
+or value estimate. DQN, if supplied, displays Q-values and `max Q(s,a)` rather than PPO labels.
+
+Offscreen smoke test (no display window):
+
+```bash
+SDL_VIDEODRIVER=dummy python -m eval.play_arena --style rotation --random --debug --headless --frames 4 --episodes 1 --no-save
+```
+
 
 ## What is visible on screen
 

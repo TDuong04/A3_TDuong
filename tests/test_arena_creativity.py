@@ -91,6 +91,7 @@ def test_effects_and_overlay_preserve_world_and_global_random_streams(style):
     env = combat_scene(style)
     reference = combat_scene(style)
     renderer = ArenaRenderer(headless=True)
+    renderer.show_debug = True
     renderer.draw(env)
     python_rng = random.getstate()
     numpy_rng = pickle.dumps(np.random.get_state())
@@ -104,6 +105,7 @@ def test_effects_and_overlay_preserve_world_and_global_random_streams(style):
         if step % 7 == 0:
             renderer.toggle_observation_overlay()
             renderer.toggle_effects()
+            renderer.toggle_debug()
         assert np.array_equal(actual[0], expected[0])
         assert actual[1:] == expected[1:]
         assert pickle.dumps(env.__dict__) == pickle.dumps(reference.__dict__)
