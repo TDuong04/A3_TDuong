@@ -86,3 +86,32 @@ A3-026 is not present in this checkout; no video file was edited.
   arena multiprocessing socket permission failures; the rerun with local subprocess
   permissions passed without changing arena code. Test dependencies were installed
   into `/private/tmp/a3-029-venv`, leaving the project dependency files unchanged.
+
+## Independent verification (2026-09-10, rebased onto main)
+
+Cherry-picked onto main at `3a018c8` rather than merged from its original branch, which sat 12
+commits behind and carried three A3-018 creativity commits belonging to their own PR. A3-029's own
+commit touches no arena file, so it has no dependency on that work - only `INDEX.md` conflicted,
+and the board is generated, so it was regenerated rather than hand-merged.
+
+Suite 741 -> 800 on this branch.
+
+What was checked by running rather than by reading:
+
+- `test_live_updates_match_existing_training` is the load-bearing test and it is stronger than it
+  looks. It runs the real trainer and `LiveLearner` on the same seed, records every
+  `(action, result)` transition from both, and asserts the transition logs are *identical* and the
+  final Q-tables are equal - so the overlay is displaying the real algorithm, not a reimplementation
+  that resembles it. It also pins the TD algebra and the intrinsic formula per step.
+- The off-policy/on-policy distinction is structural, not cosmetic: a Q-learning update carries
+  `next_action=None` because it bootstraps from the maximum, and a SARSA update carries the actual
+  chosen successor action. That is the difference rubric row C is graded on, and it is now on screen.
+- The read-only claim holds under mutation. Changing the overlay's Q-table read from `.get(state)`
+  to `[state]` - this project's recurring `defaultdict` trap, which would insert a zero row per
+  drawn cell - is caught by `test_overlays_are_read_only_and_render_all_levels` on both algorithms.
+- `--learn` launches and lists `I` and `V` in the on-screen legend; frozen-table evaluation remains
+  the default, so nothing about the existing playback path changed.
+
+Not re-verified line by line: the remaining self-ticked criteria above are the author's, and the
+panel's visual layout at various cell sizes has a test but has not been looked at by a human on
+this branch.
