@@ -1,6 +1,6 @@
 """Observation vector — the fixed-size numeric view the deep RL agent trains on.
 
-Fixed-size numeric vector of `OBS_DIM` (20) float32 values. No pixels, no screenshots — the brief
+Baseline vector of `OBS_DIM` (20) float32 values; mechanics mode appends 16 features. No pixels, no screenshots — the brief
 forbids them and the rubric checks for a numeric feature vector.
 
 Layout:
@@ -25,7 +25,8 @@ There is deliberately no "spawner exists" flag to match the enemy one at index 1
 validation found it constant at 1.0 across 20,000 random steps and both trained policies, and the
 cause is structural rather than statistical: `ArenaEnv._maybe_advance_phase()` lays out the next
 phase's spawners in the same frame the last one is destroyed, so no observation is ever built from
-a world with an empty spawner list. The flag could not read 0.0, and an input that cannot vary is
+a world with an empty spawner list in baseline mode. Mechanics mode may wait for an elite
+with no spawners, but the live count still carries presence without an extra flag. The flag could not read 0.0, and an input that cannot vary is
 capacity the network pays for and learns nothing from. `spawners_alive` at index 19 already carries
 the live count, which is the same information with a range.
 
@@ -146,10 +147,41 @@ def observation_scales() -> ObservationScales:
     )
 
 
-def describe() -> list[str]:
-    """Feature names in index order, for the overlay and the report figure."""
-    return list(FEATURE_NAMES)
+MECHANIC_FEATURE_NAMES = (
+    "shield_charge", "pickup_local_dx", "pickup_local_dy", "pickup_exists", "pickup_lifetime",
+    "elite_local_dx", "elite_local_dy", "elite_health", "elite_exists",
+    "elite_pursuit", "elite_windup", "elite_charge", "elite_recovery", "elite_timer",
+    "charge_local_dx", "charge_local_dy",
+)
 
+
+def describe(mechanics: bool = False) -> list[str]:
+    """Feature names in index order, for the overlay and the report figure."""
+    return list(FEATURE_NAMES + (MECHANIC_FEATURE_NAMES if mechanics else ()))
+
+
+def mechanic_observation(player, pickups, enemies) -> np.ndarray:
+    """Additional ship-relative inputs; absent targets have zeroed slots."""
+    from .mechanics import EliteCharger
+
+    obs = np.zeros(len(MECHANIC_FEATURE_NAMES), dtype=np.float32)
+    diagonal = observation_scales().diagonal
+    obs[0] = player.shield_charge
+    pickup = nearest_alive(player, pickups)
+    if pickup is not None:
+        obs[1:3] = np.array(to_ship_local(player.heading, pickup.x - player.x,
+                                        pickup.y - player.y)) / diagonal
+        obs[3] = 1
+        obs[4] = pickup.remaining / pickup.lifetime
+    elite = nearest_alive(player, [e for e in enemies if isinstance(e, EliteCharger)])
+    if elite is not None:
+        obs[5:7] = np.array(to_ship_local(player.heading, elite.x - player.x,
+                                        elite.y - player.y)) / diagonal
+        obs[7:9] = elite.health_fraction, 1
+        obs[9 + elite.STATES.index(elite.state)] = 1
+        obs[13] = elite.remaining / elite.state_duration
+        obs[14:16] = to_ship_local(player.heading, elite.charge_dx, elite.charge_dy)
+    return np.clip(obs, -1, 1)
 
 def to_ship_local(heading: float, dx: float, dy: float) -> tuple[float, float]:
     """Rotate a world-frame offset by `-heading` into the ship's frame.

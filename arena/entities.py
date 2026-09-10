@@ -251,6 +251,8 @@ class Player(DestructibleEntity):
         self.heading = _wrap_angle(heading)  # radians, 0 points along +x
         self.shoot_cooldown_remaining = 0.0
         self.invulnerable_remaining = 0.0
+        self.shield_charge = 0
+        self.shield_blocks = 0
 
         # `drag` is per second of coasting; converting once here keeps the per-frame work to one
         # multiply and keeps the constant honest if FIXED_DT ever changes.
@@ -380,6 +382,11 @@ class Player(DestructibleEntity):
         hit instead of once per frame of contact.
         """
         if self.is_invulnerable:
+            return False
+        if self.alive and amount > 0 and self.shield_charge:
+            self.shield_charge = 0
+            self.shield_blocks += 1
+            self.invulnerable_remaining = self.config.invulnerability_time
             return False
         if not super().take_damage(amount):
             return False

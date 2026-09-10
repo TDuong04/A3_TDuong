@@ -58,6 +58,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv 
 
 from arena.constants import CONTROL_STYLES  # noqa: E402
 from arena.env import ArenaEnv  # noqa: E402
+from arena.mechanics import MechanicsConfig  # noqa: E402
+from arena.observation import describe  # noqa: E402
 from common.config import ArenaTrainConfig  # noqa: E402
 from common.seeding import seed_everything  # noqa: E402
 from train.callbacks import (  # noqa: E402
@@ -93,6 +95,7 @@ def make_env(
     seed: int,
     rank: int,
     monitor_dir: Path | None = None,
+    mechanics: bool = False,
 ) -> Callable[[], gym.Env]:
     """Build the thunk `SubprocVecEnv` calls inside each worker.
 
@@ -106,9 +109,10 @@ def make_env(
         # worker imports pygame this is the only place left to say "no display".
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
-        env: gym.Env = ArenaEnv(control_style=control_style, render_mode=None)
+        env: gym.Env = ArenaEnv(control_style=control_style, render_mode=None, mechanics=mechanics)
         filename = None if monitor_dir is None else str(monitor_dir / f"worker_{rank}")
-        env = Monitor(env, filename=filename, info_keywords=BEHAVIOUR_INFO_KEYS)
+        env = Monitor(env, filename=filename, info_keywords=BEHAVIOUR_INFO_KEYS + (
+            ("pickups_collected", "shield_blocks", "elites_killed") if mechanics else ()))
         env.reset(seed=seed + rank)
         env.action_space.seed(seed + rank)
         return env
@@ -121,6 +125,7 @@ def build_vec_env(
     n_envs: int,
     seed: int,
     monitor_dir: Path | None = None,
+    mechanics: bool = False,
 ) -> VecEnv:
     """`n_envs` monitored arenas. `SubprocVecEnv` above one env, `DummyVecEnv` at one.
 
@@ -132,7 +137,7 @@ def build_vec_env(
     if monitor_dir is not None:
         monitor_dir.mkdir(parents=True, exist_ok=True)
 
-    factories = [make_env(control_style, seed, rank, monitor_dir) for rank in range(n_envs)]
+    factories = [make_env(control_style, seed, rank, monitor_dir, mechanics) for rank in range(n_envs)]
     if n_envs == 1:
         return DummyVecEnv(factories)
     return SubprocVecEnv(factories)
@@ -270,7 +275,10 @@ def train(args: argparse.Namespace) -> Path:
     name = args.run_name or run_name(config, args.style, args.tag)
     run_dir = Path(args.log_dir) / name
     monitor_dir = run_dir / "monitor"
+    mechanics = args.mechanics
     models_dir = Path(args.models_dir)
+    if mechanics:
+        models_dir = models_dir / "mechanics"
     models_dir.mkdir(parents=True, exist_ok=True)
     model_path = models_dir / f"{config.algorithm.lower()}_{args.style}"
 
@@ -280,6 +288,9 @@ def train(args: argparse.Namespace) -> Path:
         args.style,
         extra={
             "run_name": name,
+            "mechanics": mechanics,
+            "observation_dim": len(describe(mechanics)),
+            "mechanics_config": asdict(MechanicsConfig.from_yaml()) if mechanics else None,
             "model_path": str(model_path.with_suffix(".zip")),
             "ignored_hyperparameters": ignored_hyperparameters(config),
         },
@@ -287,7 +298,7 @@ def train(args: argparse.Namespace) -> Path:
     print(f"[train_arena] {name}")
     print(f"[train_arena] {json.dumps(metadata, indent=2)}")
 
-    venv = build_vec_env(args.style, config.n_envs, config.seed, monitor_dir)
+    venv = build_vec_env(args.style, config.n_envs, config.seed, monitor_dir, mechanics)
     try:
         model = build_model(config, venv, run_dir, device=args.device, verbose=args.verbose)
         callbacks = CallbackList([
@@ -318,6 +329,9 @@ def train(args: argparse.Namespace) -> Path:
         args.style,
         extra={
             "run_name": name,
+            "mechanics": mechanics,
+            "observation_dim": len(describe(mechanics)),
+            "mechanics_config": asdict(MechanicsConfig.from_yaml()) if mechanics else None,
             "model_path": str(model_path.with_suffix(".zip")),
             "ignored_hyperparameters": ignored_hyperparameters(config),
             "finished": datetime.now().isoformat(timespec="seconds"),
@@ -333,6 +347,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--style", choices=sorted(CONTROL_STYLES), required=True,
                         help="control scheme to train; one model is trained per style")
+    parser.add_argument("--mechanics", action="store_true",
+                        help="train shield pickups and elite chargers (separate models/mechanics)")
     parser.add_argument("--config", default="arena", help="config file under config/")
     parser.add_argument("--algo", choices=sorted(ALGORITHMS), default=None,
                         help="override config/arena.yaml training.algorithm")

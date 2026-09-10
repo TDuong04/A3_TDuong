@@ -150,7 +150,7 @@ class PerceptionOverlay:
 
     @staticmethod
     def values(env):
-        return {name: float(value) for name, value in zip(describe(), env.observation(), strict=True)}
+        return {name: float(value) for name, value in zip(describe(env.mechanics), env.observation(), strict=True)}
 
     @staticmethod
     def axes(player):

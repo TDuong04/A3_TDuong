@@ -44,7 +44,7 @@ import pygame
 
 from common.config import load_yaml
 
-from .constants import ARENA_HEIGHT, ARENA_WIDTH, FPS
+from .constants import ARENA_HEIGHT, ARENA_WIDTH, FPS, OBS_DIM
 from .observation import describe
 from .policy_view import PolicyView
 from .visuals import CombatFeedback, PerceptionOverlay
@@ -124,6 +124,7 @@ class ArenaRenderer:
     HUD_HEIGHT = 58
     #: Width of the observation panel drawn down the right-hand side when the overlay is on.
     OVERLAY_PANEL_WIDTH = 214
+    MECHANICS_PANEL_WIDTH = 280
 
     def __init__(
         self,
@@ -150,6 +151,7 @@ class ArenaRenderer:
         self.show_policy_overlay = self.config.show_policy_overlay
         self.should_close = False
         self.effects_enabled = effects
+        self.mechanics_visible = False
         self.feedback = CombatFeedback()
         self.perception = PerceptionOverlay()
 
@@ -172,7 +174,9 @@ class ArenaRenderer:
     @property
     def surface_size(self) -> tuple[int, int]:
         """Window size: HUD strip on top, playfield below, observation panel down the right."""
-        return (ARENA_WIDTH + self.OVERLAY_PANEL_WIDTH, ARENA_HEIGHT + self.HUD_HEIGHT)
+        return (ARENA_WIDTH + self.OVERLAY_PANEL_WIDTH
+                + (self.MECHANICS_PANEL_WIDTH if self.mechanics_visible else 0),
+                ARENA_HEIGHT + self.HUD_HEIGHT)
 
     def to_screen(self, x: float, y: float) -> tuple[int, int]:
         """Arena coordinates to surface coordinates — the playfield sits below the HUD."""
@@ -222,6 +226,7 @@ class ArenaRenderer:
         optional because human play and the render tests have no model behind them; when it is
         absent the policy panel is simply not drawn.
         """
+        self.mechanics_visible = env.mechanics
         surface = self._ensure_surface()
         dt = self._tick()
         self._pump_events()
@@ -234,6 +239,8 @@ class ArenaRenderer:
 
         for spawner in env.spawners:
             self._draw_spawner(surface, spawner)
+        if env.mechanics:
+            self._draw_mechanics(surface, env)
         for enemy in env.enemies:
             self._draw_enemy(surface, enemy)
         for bullet in env.bullets:
@@ -258,6 +265,8 @@ class ArenaRenderer:
                 field_surface.blit(image, offset)
         if self.show_observation_overlay:
             self.perception.draw_compass(surface, env)
+        if env.mechanics:
+            self._draw_mechanics_panel(surface, env)
         self._draw_hud(surface, env, policy_view)
         if self._banner_remaining > 0.0:
             self._draw_phase_banner(surface)
@@ -310,6 +319,49 @@ class ArenaRenderer:
         elif self._banner_remaining > 0.0:
             self._banner_remaining = max(0.0, self._banner_remaining - dt)
 
+    def _text(self, surface, text, x, y, color=COLOR_TEXT):
+        surface.blit(self.font_small.render(str(text), True, color), (x, y))
+
+    def _draw_mechanics(self, surface, env):
+        from .mechanics import EliteCharger
+
+        cyan = (101, 225, 241)
+        for pickup in env.pickups:
+            center = self.to_screen(pickup.x, pickup.y)
+            pygame.draw.circle(surface, cyan, center, int(pickup.radius), 2)
+            self._text(surface, "S", center[0] - 5, center[1] - 7, cyan)
+            self._text(surface, f"{pickup.remaining:.1f}s", center[0] - 16, center[1] + 14, cyan)
+        if env.player.shield_charge:
+            pygame.draw.circle(surface, cyan, self.to_screen(env.player.x, env.player.y),
+                               int(env.player.radius + 8), 3)
+        for elite in (e for e in env.enemies if isinstance(e, EliteCharger)):
+            if elite.state == "windup":
+                distance = elite.mechanics_config.charge_speed * elite.mechanics_config.charge_seconds
+                end = self.to_screen(elite.x + elite.charge_dx * distance,
+                                     elite.y + elite.charge_dy * distance)
+                old_clip = surface.get_clip()
+                surface.set_clip(pygame.Rect(0, self.HUD_HEIGHT, ARENA_WIDTH, ARENA_HEIGHT))
+                pygame.draw.line(surface, (255, 200, 80), self.to_screen(elite.x, elite.y), end, 4)
+                surface.set_clip(old_clip)
+
+
+    def _draw_mechanics_panel(self, surface, env):
+        left = ARENA_WIDTH + self.OVERLAY_PANEL_WIDTH
+        pygame.draw.rect(surface, COLOR_PANEL,
+                         (left, self.HUD_HEIGHT, self.MECHANICS_PANEL_WIDTH, ARENA_HEIGHT))
+        self._text(surface, "SHIELD + ELITE", left + 12, self.HUD_HEIGHT + 12, COLOR_ACCENT)
+        self._text(surface, "Shield: " + ("READY" if env.player.shield_charge else "empty"),
+                   left + 12, self.HUD_HEIGHT + 40)
+        self._text(surface, "Collect S orbs after spawner kills.", left + 12, self.HUD_HEIGHT + 64)
+        self._text(surface, "Elite: dodge wind-up, attack recovery.", left + 12, self.HUD_HEIGHT + 86)
+        if self.show_observation_overlay:
+            y = self.HUD_HEIGHT + 124
+            for name, value in zip(describe(True)[OBS_DIM:], env.last_observation[OBS_DIM:], strict=True):
+                self._text(surface, name, left + 12, y, COLOR_TEXT_DIM)
+                self._text(surface, f"{value:+.2f}", left + 224, y)
+                y += 23
+
+
     # --- entities -----------------------------------------------------------------------------
 
     def _draw_player(self, surface: pygame.Surface, player: Any) -> None:
@@ -341,7 +393,18 @@ class ArenaRenderer:
         return points
 
     def _draw_enemy(self, surface: pygame.Surface, enemy: Any) -> None:
+        from .mechanics import EliteCharger
+
         center = self.to_screen(enemy.x, enemy.y)
+        if isinstance(enemy, EliteCharger):
+            color = {"pursuit": (201, 130, 255), "windup": (255, 200, 80),
+                     "charge": (255, 80, 95), "recovery": (120, 190, 205)}[enemy.state]
+            pygame.draw.circle(surface, color, center, int(enemy.radius))
+            pygame.draw.circle(surface, COLOR_PANEL, center, int(enemy.radius - 5), 3)
+            self._draw_health_bar(surface, enemy, width=48, offset=enemy.radius + 13)
+            self._text(surface, f"ELITE {enemy.state} {enemy.remaining:.1f}s",
+                       center[0] - 60, center[1] + enemy.radius + 5, color)
+            return
         pygame.draw.circle(surface, COLOR_ENEMY, center, int(enemy.radius))
         pygame.draw.circle(surface, COLOR_ENEMY_CORE, center, max(2, int(enemy.radius * 0.4)))
 
@@ -470,7 +533,7 @@ class ArenaRenderer:
         y += 22
 
         values = env.last_observation
-        for name, value in zip(describe(), values, strict=True):
+        for name, value in zip(describe(), values[:OBS_DIM], strict=True):
             surface.blit(self.font_small.render(name, True, COLOR_TEXT_DIM), (panel_x + 12, y))
             text = self.font_small.render(f"{float(value):+.2f}", True, COLOR_TEXT)
             surface.blit(text, (panel_x + self.OVERLAY_PANEL_WIDTH - 14 - text.get_width(), y))

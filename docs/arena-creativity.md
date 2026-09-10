@@ -1,4 +1,8 @@
-# A3-018 integrated with main
+# A3-018 visual integration
+
+For the shield pickups and elite chargers added on 2026-09-10, see
+[arena-mechanics.md](arena-mechanics.md). The visual-only implementation described below
+is supporting evidence; the two gameplay systems satisfy the stricter creativity scope.
 
 Integration base: `bf75cfc` (main fetched on 2026-09-08). The older A3-018 branch
 replaced an unfinished renderer/evaluation stub; it must not be copied over the
@@ -12,8 +16,8 @@ completed A3-009 and A3-012 implementation now on main.
 | Human/evaluation | Reuse main's keyboard mapping, seeded episodes, trained model loading and result export. |
 | Combat | Reuse A3-018's bounded renderer-owned flashes, hit rings, particles and shake. E toggles these added effects. |
 
-No simulation, physics, reward, observation, training configuration, saved model or
-result artifact is modified. Main's existing invulnerability flicker remains active
+The original visual-only integration modified no simulation, physics, reward, observation,
+training configuration, saved model or result artifact. Main's existing invulnerability flicker remains active
 when E disables the added combat effects. The older separate `arena.play` application
 is not needed; use the existing evaluation entry point for both humans and agents.
 

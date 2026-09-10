@@ -6,7 +6,11 @@ shared. Forking this into two files is the fastest way to lose rubric row G — 
 twice, the two agents stop being comparable, and report row R6's comparison becomes meaningless.
 
     action_space = Discrete(5) for rotation, Discrete(6) for direct  # indices in constants.py
-    observation_space = Box(-1.0, 1.0, shape=(OBS_DIM,), dtype=float32)
+    observation_space = Box(-1.0, 1.0, shape=(20,), dtype=float32)  # baseline
+
+`mechanics=True` enables shield pickups and elite chargers, extending the vector to 36
+features. From phase 2, progression also requires defeating the elite. Baseline mode
+preserves the rules and observation layout of existing checkpoints.
 
 `step(action)` runs `ACTION_REPEAT` (3) physics frames of `FIXED_DT` with the action held, then
 builds the observation. That cuts the episode horizon threefold for free and makes credit
@@ -26,7 +30,7 @@ behavioural metrics the diagnostician and the report depend on; reward alone can
 policy that is progressing from one that is farming a shaping term.
 
 Randomness lives in `self.np_random`, seeded through `reset(seed=...)`, and covers exactly two
-things: the ship's starting heading and where each phase puts its spawners. Both are randomised on
+things: the ship's starting heading and where each phase puts its spawners (and elite when enabled). Both are randomised on
 purpose. A fixed heading would let the policy memorise one opening; a fixed spawner layout would
 let it memorise the map instead of learning to read the observation. Everything else — enemy
 seeking, spawn cadence, bullet flight — is deterministic in `entities.py`, so a seed plus an action
@@ -51,7 +55,7 @@ arguments, `draw(env)` draws one frame of the env handed to it, and `close()` te
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import Any
 
@@ -70,7 +74,6 @@ from .constants import (
     FPS,
     MAX_EPISODE_STEPS,
     N_ACTIONS,
-    OBS_DIM,
     REWARD_DAMAGE_TAKEN,
     REWARD_DEATH,
     REWARD_ENEMY_DESTROYED,
@@ -81,7 +84,8 @@ from .constants import (
     RotationAction,
 )
 from .entities import Bullet, Enemy, Player, Spawner, phase_config
-from .observation import build_observation
+from .observation import build_observation, describe, mechanic_observation, observation_scales
+from .mechanics import EliteCharger, MechanicsConfig, ShieldPickup
 
 
 @dataclass(frozen=True)
@@ -115,6 +119,7 @@ class ArenaEnv(gym.Env):
         render_mode: str | None = None,
         seed: int | None = None,
         max_episode_steps: int | None = None,
+        mechanics: bool = False,
     ) -> None:
         if control_style not in CONTROL_STYLES:
             raise ValueError(
@@ -127,6 +132,8 @@ class ArenaEnv(gym.Env):
             )
 
         self.control_style = control_style
+        self.mechanics = bool(mechanics)
+        self.mechanics_config = MechanicsConfig.from_yaml() if self.mechanics else None
         self.actions = ACTION_ENUMS[control_style]
         self.render_mode = render_mode
         self.max_episode_steps = int(
@@ -136,7 +143,7 @@ class ArenaEnv(gym.Env):
 
         self.action_space = spaces.Discrete(N_ACTIONS[control_style])
         self.observation_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(OBS_DIM,), dtype=np.float32
+            low=-1.0, high=1.0, shape=(len(describe(self.mechanics)),), dtype=np.float32
         )
 
         self._renderer: Any | None = None
@@ -158,6 +165,8 @@ class ArenaEnv(gym.Env):
         self.enemies_killed = 0
         self.spawners_destroyed = 0
         self.damage_taken = 0
+        self.pickups_collected = 0
+        self.elites_killed = 0
         self.episode_reward = 0.0
         self.last_action = 0
         self._phase_advanced_this_step = False
@@ -171,6 +180,7 @@ class ArenaEnv(gym.Env):
         self.enemies: list[Enemy] = []
         self.bullets: list[Bullet] = []
         self.spawners: list[Spawner] = []
+        self.pickups: list[ShieldPickup] = []
         self._begin_phase()
 
         return self._observation(), self._info()
@@ -248,7 +258,7 @@ class ArenaEnv(gym.Env):
 
     @property
     def phase_just_advanced(self) -> bool:
-        """True for exactly one agent step after the last spawner of a phase was destroyed."""
+        """True for exactly one agent step after all phase completion conditions are met."""
         return bool(self._phase_advanced_this_step)
 
     @property
@@ -269,6 +279,9 @@ class ArenaEnv(gym.Env):
         for _ in range(settings.spawners):
             x, y = self._sample_spawner_position()
             self.spawners.append(Spawner(x, y, settings))
+        if self.mechanics and self.phase >= self.mechanics_config.elite_first_phase:
+            x, y = self._sample_spawner_position()
+            self.enemies.append(EliteCharger(x, y, self.mechanics_config))
 
     def _sample_spawner_position(self) -> tuple[float, float]:
         """Rejection-sample a spot clear of the player and of the spawners already placed.
@@ -310,6 +323,7 @@ class ArenaEnv(gym.Env):
             enemy.update(self.player.x, self.player.y)
 
         reward = self._resolve_bullet_hits()
+        self._advance_pickups()
         reward += self._resolve_contact_damage()
         self._drop_dead()
         reward += self._maybe_advance_phase()
@@ -358,10 +372,21 @@ class ArenaEnv(gym.Env):
             enemy = spawner.update()
             # Past the cap the spawn is dropped rather than queued: an unbounded enemy list is the
             # usual reason a long run slows to a crawl.
-            if enemy is not None and len(self.enemies) < self.episode_config.max_enemies:
+            # Reserve a slot for the next phase's elite.
+            cap = self.episode_config.max_enemies - int(self.mechanics)
+            if enemy is not None and len(self.enemies) < cap:
                 self.enemies.append(enemy)
 
     # --- collisions and rewards -----------------------------------------------------------------
+
+    def _advance_pickups(self) -> None:
+        for pickup in self.pickups:
+            pickup.update()
+            if pickup.collides_with(self.player) and not self.player.shield_charge:
+                self.player.shield_charge = 1
+                self.pickups_collected += 1
+                pickup.kill()
+        self.pickups = [pickup for pickup in self.pickups if pickup.alive]
 
     def _resolve_bullet_hits(self) -> float:
         """One bullet spends itself on one target. Rewards come from `constants.py` only."""
@@ -375,6 +400,8 @@ class ArenaEnv(gym.Env):
                     enemy.take_damage(bullet.damage)
                     if not enemy.alive:
                         self.enemies_killed += 1
+                        if isinstance(enemy, EliteCharger):
+                            self.elites_killed += 1
                         reward += REWARD_ENEMY_DESTROYED
                     break
             if not bullet.alive:
@@ -385,6 +412,9 @@ class ArenaEnv(gym.Env):
                     spawner.take_damage(bullet.damage)
                     if not spawner.alive:
                         self.spawners_destroyed += 1
+                        if self.mechanics:
+                            self.pickups.append(ShieldPickup(spawner.x, spawner.y,
+                                                             self.mechanics_config))
                         reward += REWARD_SPAWNER_DESTROYED
                     break
         return reward
@@ -413,12 +443,12 @@ class ArenaEnv(gym.Env):
         self.spawners = [spawner for spawner in self.spawners if spawner.alive]
 
     def _maybe_advance_phase(self) -> float:
-        """Destroying every active spawner advances the phase and lays out the next one.
+        """Clearing spawners (and the elite in mechanics mode) advances the phase.
 
         Enemies already loose in the arena are not cleared: the reward is for clearing spawners,
         and a free wipe would make the phase transition the safest moment in the episode.
         """
-        if self.spawners:
+        if self.spawners or any(isinstance(e, EliteCharger) and e.alive for e in self.enemies):
             return 0.0
         self.phase += 1
         self._phase_advanced_this_step = True
@@ -428,7 +458,14 @@ class ArenaEnv(gym.Env):
     # --- observation and info --------------------------------------------------------------------
 
     def _observation(self) -> np.ndarray:
-        obs = build_observation(self.player, self.enemies, self.spawners, self.phase)
+        scales = observation_scales()
+        if self.mechanics:
+            scales = replace(scales, max_relative_speed=max(
+                scales.max_relative_speed,
+                self.mechanics_config.charge_speed + self.player.config.speed))
+        obs = build_observation(self.player, self.enemies, self.spawners, self.phase, scales)
+        if self.mechanics:
+            obs = np.concatenate((obs, mechanic_observation(self.player, self.pickups, self.enemies)))
         # Cached rather than recomputed on demand: the overlay must show the vector the agent was
         # actually handed on this step, not one rebuilt from a world that has since moved on.
         self._last_observation = obs
@@ -441,6 +478,10 @@ class ArenaEnv(gym.Env):
         complete summary of it — which is what `Monitor(info_keywords=...)` records.
         """
         return {
+            "mechanics": self.mechanics,
+            "pickups_collected": self.pickups_collected,
+            "shield_blocks": self.player.shield_blocks,
+            "elites_killed": self.elites_killed,
             "phase": self.phase,
             "spawners_destroyed": self.spawners_destroyed,
             "enemies_killed": self.enemies_killed,
