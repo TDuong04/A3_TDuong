@@ -69,6 +69,32 @@ def count_color(surface: pygame.Surface, color: tuple[int, int, int]) -> int:
     return int((pixels(surface) == np.array(color, dtype=np.uint8)).all(axis=2).sum())
 
 
+def test_the_model_label_reaches_the_hud_and_only_when_set(env: ArenaEnv) -> None:
+    """In a checkpoint time-lapse the step count is the one thing telling 100k from 400k on camera,
+    so it has to be pixels in the HUD — and human play, which has no network, must draw nothing."""
+    width = ArenaRenderer(headless=True).surface_size[0]
+    corner = (slice(0, 40), slice(width - 420, width))
+
+    bare = ArenaRenderer(headless=True)
+    labelled = ArenaRenderer(headless=True)
+    labelled.model_label = "200,000 training steps"
+    labelled.model_source = "ppo_direct_shipped_200000_steps.zip"
+
+    without = pixels(bare.draw(env))[corner]
+    with_label = pixels(labelled.draw(env))[corner]
+    assert int((without != with_label).any(axis=2).sum()) > 200
+
+
+def test_the_longest_model_label_clears_the_hud_fields() -> None:
+    """A checkpoint name at HUD size once ran ~550px and printed over the STYLE field."""
+    renderer = ArenaRenderer(headless=True)
+    right = renderer.surface_size[0] - 14
+    fields_end = 14 + 5 * 132 + renderer.font_hud.size("rotation")[0]
+    longest_source = "ppo_rotation_mechanics_2000000_steps.zip"
+    assert right - renderer.font_hud.size("2,000,000 training steps")[0] > fields_end
+    assert right - renderer.font_small.size(longest_source)[0] > fields_end
+
+
 class RecordingFont:
     """Wraps a `pygame.font.Font` and records every string it is asked to render.
 

@@ -37,4 +37,9 @@ scratch/
 # reads back. A hyperparameter sweep writes roughly 7MB of these per run, so they compound —
 # unlike the figures, curves, event files and tickets, which are read, reviewed and submitted.
 logs/**/*.zip
-models/checkpoints/
+# The shipped runs' snapshots are the exception: `eval.play_arena --model` plays them back as the
+# learning time-lapse shown in the video, and the brief requires the models on camera to be the
+# ones in the repo. Ignoring `models/checkpoints/*` rather than the directory is what lets the
+# `!` line re-include them — git cannot re-include a file inside an ignored directory.
+models/checkpoints/*
+!models/checkpoints/*_shipped_*_steps.zip

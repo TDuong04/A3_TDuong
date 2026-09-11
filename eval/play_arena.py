@@ -111,13 +111,36 @@ def resolve_model(style: str, algo: str = "ppo", models_dir: Path | None = None,
 
 
 def load_agent(style: str, algo: str = "ppo", models_dir: Path | None = None,
-               *, mechanics: bool = False):
-    """Load the SB3 policy. Imported lazily so `--human` needs no torch and no model on disk."""
+               *, mechanics: bool = False, model_path: Path | None = None):
+    """Load the SB3 policy. Imported lazily so `--human` needs no torch and no model on disk.
+
+    `model_path`, when given, is loaded verbatim instead of resolving `{algo}_{style}.zip` from a
+    directory -- this is how a learning time-lapse plays an exact `models/checkpoints/*.zip`
+    snapshot rather than the final model. `validate_policy_space` (called by every caller) still
+    catches an incompatible checkpoint before it reaches the env.
+    """
     from stable_baselines3 import DQN, PPO
 
-    path = resolve_model(style, algo, models_dir, mechanics=mechanics)
+    path = Path(model_path) if model_path is not None else resolve_model(
+        style, algo, models_dir, mechanics=mechanics
+    )
+    if model_path is not None and not path.exists():
+        raise ArenaEvalError(f"--model {path} does not exist.")
     loader = {"ppo": PPO, "dqn": DQN}[algo]
     return loader.load(path, device="cpu")
+
+
+def model_label(agent: Any) -> str | None:
+    """The HUD's answer to "how long did this network train?".
+
+    Read from the model itself (`num_timesteps`, saved by SB3), not parsed out of the filename, so a
+    renamed file cannot put a wrong number on camera. Human and random play have no network and get
+    no label.
+    """
+    steps = getattr(agent, "num_timesteps", None)
+    if not isinstance(steps, int) or isinstance(agent, RandomPolicy):
+        return None
+    return f"{steps:,} training steps"
 
 
 def has_trained_models(models_dir: Path | None = None) -> bool:
@@ -139,6 +162,7 @@ def load_policy(
     random: bool = False,
     seed: int = 0,
     mechanics: bool = False,
+    model_path: Path | None = None,
 ) -> tuple[Any, str]:
     """The policy to run, and the name to record it under.
 
@@ -148,9 +172,15 @@ def load_policy(
     that is a typo or a half-finished run, and substituting random actions there would quietly
     produce a table indistinguishable from a trained result. Neither path ever trains on demand;
     both name the command that would.
+
+    `model_path` bypasses both of those and loads that exact file -- e.g. a
+    `models/checkpoints/*_steps.zip` snapshot for a learning time-lapse. `--random` still wins if
+    both are given, since a random baseline should never silently be satisfied by an ignored path.
     """
     if random:
         return RandomPolicy(N_ACTIONS[style], seed=seed), RandomPolicy.name
+    if model_path is not None:
+        return load_agent(style, algo, mechanics=mechanics, model_path=model_path), algo
     if not has_trained_models(models_dir):
         directory = Path(models_dir) if models_dir is not None else MODELS_DIR
         print(
@@ -190,6 +220,7 @@ def evaluate(
     agent: Any | None = None,
     random_policy: bool = False,
     mechanics: bool = False,
+    model_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run `episodes` seeded episodes with no window and return the numbers the report needs.
 
@@ -199,10 +230,11 @@ def evaluate(
     """
     if style not in STYLES:
         raise ValueError(f"unknown control style {style!r}; expected one of {STYLES}")
-    if mechanics:
+    if mechanics and model_path is None:
         models_dir = (Path(models_dir) if models_dir is not None else MODELS_DIR) / "mechanics"
     if agent is None:
-        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed, mechanics=mechanics)
+        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed,
+                                     mechanics=mechanics, model_path=model_path)
     else:
         # An injected agent names itself if it can. That is how a `RandomPolicy` handed in
         # directly still labels its own output, rather than being filed under `ppo`.
@@ -247,6 +279,11 @@ def evaluate(
         "policy": policy,
         "episodes": episodes,
         "seed": seed,
+        # Which network, and how far into training: a time-lapse row is meaningless without both.
+        # A random run keeps no `model` even if one was passed -- `--random` wins in `load_policy`.
+        "training_steps": getattr(agent, "num_timesteps", None),
+        **({"model": _reportable(Path(model_path).resolve())}
+           if model_path is not None and policy != RandomPolicy.name else {}),
         **{key + "_mean": mean(values) for key, values in mechanic_metrics.items()},
         "return_mean": mean(returns),
         "return_std": float(statistics.pstdev(returns)) if len(returns) > 1 else 0.0,
@@ -311,6 +348,12 @@ def write_results(
         raise ValueError("Compare control styles under the same mechanics setting")
     if True in modes:
         directory = directory / "mechanics"
+    # A single checkpoint is not the shipped model. `comparison.md` is row I's evidence, and a
+    # time-lapse run writing over it would put a half-trained policy's numbers under a heading that
+    # names the model in `models/`.
+    checkpoint_run = any(entry.get("model") for entry in stats)
+    if checkpoint_run:
+        directory = directory / "checkpoints"
     directory.mkdir(parents=True, exist_ok=True)
     generated = datetime.now(UTC).isoformat(timespec="seconds")
 
@@ -324,7 +367,10 @@ def write_results(
     # cites, and one absent-minded `--random` overwriting it would put chance-level numbers under
     # a heading that claims a trained policy produced them.
     random_run = any(entry.get("policy") == RandomPolicy.name for entry in stats)
-    table = directory / ("comparison_random.md" if random_run else "comparison.md")
+    if checkpoint_run:
+        table = directory / f"comparison_{Path(stats[0]['model']).stem}.md"
+    else:
+        table = directory / ("comparison_random.md" if random_run else "comparison.md")
     table.write_text(format_comparison_markdown(stats, generated))
     written["comparison"] = table
     return written
@@ -333,6 +379,8 @@ def write_results(
 def _stem(entry: dict[str, Any]) -> str:
     """Filename stem for one style's numbers, keeping random runs off the trained filenames."""
     prefix = "eval_random" if entry.get("policy") == RandomPolicy.name else "eval"
+    if entry.get("model"):
+        return f"{prefix}_{Path(entry['model']).stem}_seed{entry['seed']}"
     return f"{prefix}_{entry['style']}_seed{entry['seed']}"
 
 
@@ -357,19 +405,34 @@ def format_comparison_markdown(stats: list[dict[str, Any]], generated: str) -> s
             f"same seed sequence so they meet the same arenas.\n\n"
         )
         command = "--style both --no-window"
-    if any(entry.get("mechanics") for entry in stats):
+    mechanics = any(entry.get("mechanics") for entry in stats)
+    if mechanics:
         command += " --mechanics"
         policy_line += "Rules: shield pickups and elite chargers.\n\n"
+    checkpoint = next((entry["model"] for entry in stats if entry.get("model")), None)
+    if checkpoint:
+        command = command.replace("--style both", f"--style {stats[0]['style']}")
+        command += f" --model {checkpoint}"
+        policy_line += (
+            f"**Single checkpoint `{Path(checkpoint).name}`, not the shipped model.** Written to "
+            f"`checkpoints/` so it can never replace the control-scheme table.\n\n"
+        )
+    # The sample size and seed are part of the command: a 3-episode table and a 30-episode one are
+    # different evidence, and the line that reproduces this file has to say which it is (A3-032).
+    if stats:
+        command += f" --episodes {stats[0]['episodes']} --seed {stats[0]['seed']}"
     header = (
         f"# Arena control-scheme comparison\n\n"
         f"Generated {generated} by `python -m eval.play_arena {command}`.\n\n"
         f"{policy_line}"
     )
+    extra_head = " Shields collected | Hits blocked | Elite kills |" if mechanics else ""
+    extra_rule = "------------------:|-------------:|------------:|" if mechanics else ""
     columns = (
         "| Style | Policy | Episodes | Return | Phase reached | Phases cleared | Spawners "
-        "| Enemies | Survival | Steps |\n"
-        "|-------|--------|---------:|-------:|--------------:|---------------:|---------:"
-        "|--------:|---------:|------:|\n"
+        "| Enemies | Survival | Steps |" + extra_head + "\n"
+        + "|-------|--------|---------:|-------:|--------------:|---------------:|---------:"
+        "|--------:|---------:|------:|" + extra_rule + "\n"
     )
     rows = "".join(
         f"| `{entry['style']}` | `{entry.get('policy', 'ppo')}` | {entry['episodes']} "
@@ -377,10 +440,115 @@ def format_comparison_markdown(stats: list[dict[str, Any]], generated: str) -> s
         f"| {entry['phase_mean']:.2f} (best {entry['phase_max']}) "
         f"| {entry['phase_cleared_episodes']}/{entry['episodes']} "
         f"| {entry['spawners_mean']:.2f} | {entry['enemies_mean']:.2f} "
-        f"| {entry['survival_rate']:.0%} | {entry['steps_mean']:.0f} |\n"
+        f"| {entry['survival_rate']:.0%} | {entry['steps_mean']:.0f} |"
+        + (
+            f" {entry.get('pickups_collected_mean', 0.0):.2f} "
+            f"| {entry.get('shield_blocks_mean', 0.0):.2f} "
+            f"| {entry.get('elites_killed_mean', 0.0):.2f} |"
+            if mechanics else ""
+        )
+        + "\n"
         for entry in stats
     )
     return header + columns + rows
+
+
+# --- learning time-lapse ----------------------------------------------------------------------
+
+
+#: The shipped runs' snapshots, written every 50k steps by the `train.train_arena` checkpointer.
+SHIPPED_CHECKPOINT_GLOB = "{algo}_{style}_shipped_*_steps.zip"
+
+
+def shipped_checkpoints(
+    style: str, algo: str = "ppo", models_dir: Path | None = None
+) -> list[Path]:
+    """Every snapshot of the shipped `style` run, earliest first, then the final model.
+
+    Sorted by the step count in the name as a number -- a text sort puts 100000 before 50000. The
+    final model is the end of the same run (`logs/ppo_<style>_shipped/`), so it closes the list,
+    unless it is a byte-for-byte copy of the last snapshot and would only repeat that row.
+    """
+    directory = Path(models_dir) if models_dir is not None else MODELS_DIR
+    snapshots = sorted(
+        (directory / "checkpoints").glob(SHIPPED_CHECKPOINT_GLOB.format(algo=algo, style=style)),
+        key=lambda path: int(path.stem.rsplit("_", 2)[-2]),
+    )
+    final = directory / f"{algo}_{style}.zip"
+    if final.exists() and not (snapshots and snapshots[-1].read_bytes() == final.read_bytes()):
+        snapshots.append(final)
+    return snapshots
+
+
+def evaluate_timelapse(
+    style: str,
+    *,
+    episodes: int = 30,
+    seed: int = 0,
+    algo: str = "ppo",
+    models_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    """The random floor, then every shipped snapshot, all on the same seeded arenas.
+
+    Returns just the random row when no snapshot is on disk, which the caller reports as an error
+    rather than writing a one-row "time-lapse".
+    """
+    rows = [evaluate(style, episodes=episodes, seed=seed, random_policy=True)]
+    for path in shipped_checkpoints(style, algo, models_dir):
+        rows.append(evaluate(style, episodes=episodes, seed=seed, algo=algo, model_path=path))
+    return rows
+
+
+def format_timelapse_markdown(style: str, rows: list[dict[str, Any]], generated: str) -> str:
+    """One row per snapshot: how the same run played at each point in its training."""
+    episodes, seed = rows[0]["episodes"], rows[0]["seed"]
+    header = (
+        f"# Learning time-lapse: `{style}`\n\n"
+        f"Generated {generated} by `python -m eval.play_arena --style {style} --timelapse "
+        f"--episodes {episodes} --seed {seed}`.\n\n"
+        f"Every saved snapshot of the shipped run (`logs/ppo_{style}_shipped/`), played "
+        f"deterministically on the same {episodes} seeded arenas (seeds {seed}-"
+        f"{seed + episodes - 1}), after a uniform random policy on those arenas as the floor. "
+        f"Replay any row on screen with `python -m eval.play_arena --style {style} --model "
+        f"<file>`; the HUD shows the step count read from the network itself.\n\n"
+        "| Training steps | Model | Return | Phase reached | Phase 1 cleared "
+        "| Enemies | Survival |\n"
+        "|---------------:|-------|-------:|--------------:|----------------:"
+        "|--------:|---------:|\n"
+    )
+    lines = []
+    for row in rows:
+        random_row = row.get("policy") == RandomPolicy.name
+        steps = "0 (random policy)" if random_row else f"{row['training_steps']:,}"
+        name = "—" if random_row else f"`{Path(row['model']).name}`"
+        lines.append(
+            f"| {steps} | {name} | {row['return_mean']:+.2f} ± {row['return_std']:.2f} "
+            f"| {row['phase_mean']:.2f} (best {row['phase_max']}) "
+            f"| {row['phase_cleared_episodes']}/{row['episodes']} | {row['enemies_mean']:.2f} "
+            f"| {row['survival_rate']:.0%} |\n"
+        )
+    return header + "".join(lines)
+
+
+def write_timelapse(
+    style: str,
+    rows: list[dict[str, Any]],
+    results_dir: Path | None = None,
+    *,
+    generated: str | None = None,
+) -> dict[str, Path]:
+    """Persist a time-lapse beside the comparison tables, the seed in both filenames."""
+    directory = Path(results_dir) if results_dir is not None else RESULTS_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    generated = generated or datetime.now(UTC).isoformat(timespec="seconds")
+    stem = f"timelapse_{style}_seed{rows[0]['seed']}"
+    data = directory / f"{stem}.json"
+    data.write_text(
+        json.dumps({"style": style, "generated": generated, "rows": rows}, indent=2) + "\n"
+    )
+    table = directory / f"{stem}.md"
+    table.write_text(format_timelapse_markdown(style, rows, generated))
+    return {"json": data, "table": table}
 
 
 # --- human control ----------------------------------------------------------------------------
@@ -433,25 +601,30 @@ def play(
     max_frames: int | None = None,
     random_policy: bool = False,
     mechanics: bool = False,
+    model_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run the env in a window, driven by the agent or by the keyboard.
 
     Returns the same summary shape `evaluate` does, so a recorded session and a headless run are
-    directly comparable.
+    directly comparable. `model_path` plays an exact checkpoint (e.g. for a learning time-lapse)
+    instead of the style's final model; see `load_policy`.
     """
     import pygame
 
     from arena.render import ArenaRenderer
 
-    if mechanics:
+    if mechanics and model_path is None:
         models_dir = (Path(models_dir) if models_dir is not None else MODELS_DIR) / "mechanics"
     if human:
         agent, policy = None, "human"
     else:
-        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed, mechanics=mechanics)
+        agent, policy = load_policy(style, algo, models_dir, random=random_policy, seed=seed,
+                                     mechanics=mechanics, model_path=model_path)
     env = ArenaEnv(control_style=style, render_mode="human", mechanics=mechanics)
     validate_policy_space(agent, env)
     renderer = ArenaRenderer(headless=headless)
+    renderer.model_label = model_label(agent)
+    renderer.model_source = Path(model_path).name if model_path is not None else None
 
     returns: list[float] = []
     phases: list[int] = []
@@ -530,6 +703,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--mechanics", action="store_true",
                         help="enable shields and elites; use models/mechanics")
+    parser.add_argument("--model", type=Path, default=None,
+                        help="play this exact checkpoint (e.g. a models/checkpoints/*_steps.zip "
+                             "snapshot) instead of the style's final model -- for a learning "
+                             "time-lapse across training. Incompatible with --style both, since a "
+                             "checkpoint file is style-specific.")
+    parser.add_argument("--timelapse", action="store_true",
+                        help="evaluate every shipped checkpoint of a style on the same seeded "
+                             "arenas, after the random floor, and write "
+                             "results/arena_eval/timelapse_<style>_seed<seed>.md")
     parser.add_argument("--headless", action="store_true", help="render offscreen")
     parser.add_argument("--frames", type=int, default=None, help="limit playback frames")
     parser.add_argument("--models-dir", type=Path, default=None)
@@ -563,15 +745,44 @@ def main(argv: list[str] | None = None) -> int:
              mechanics=args.mechanics, headless=args.headless, max_frames=args.frames)
         return 0
 
+    if args.timelapse:
+        if args.mechanics or args.model is not None or args.random:
+            print("--timelapse walks the shipped baseline checkpoints; drop --mechanics, --model "
+                  "and --random", file=sys.stderr)
+            return 2
+        for style in styles:
+            rows = evaluate_timelapse(style, episodes=args.episodes, seed=args.seed,
+                                      algo=args.algo, models_dir=args.models_dir)
+            if len(rows) == 1:
+                print(f"No shipped checkpoints for {style!r} in models/checkpoints/.",
+                      file=sys.stderr)
+                return 1
+            generated = datetime.now(UTC).isoformat(timespec="seconds")
+            print(format_timelapse_markdown(style, rows, generated))
+            if not args.no_save:
+                written = write_timelapse(style, rows, args.results_dir, generated=generated)
+                for name, path in written.items():
+                    print(f"wrote {name:<12} {_reportable(path)}")
+        return 0
+
+    if args.model is not None:
+        if args.style == "both":
+            print("--model is one style's checkpoint; pick --style direct or rotation",
+                  file=sys.stderr)
+            return 2
+        print(f"checkpoint: {_reportable(Path(args.model).resolve())}")
+
     measured: list[dict[str, Any]] = []
     try:
         for style in styles:
             if not args.no_window:
                 play(style, episodes=args.episodes, seed=args.seed, algo=args.algo,
                      headless=args.headless, max_frames=args.frames,
-                     random_policy=args.random, models_dir=args.models_dir, mechanics=args.mechanics)
+                     random_policy=args.random, models_dir=args.models_dir,
+                     mechanics=args.mechanics, model_path=args.model)
             stats = evaluate(style, episodes=args.episodes, seed=args.seed, algo=args.algo,
-                             random_policy=args.random, models_dir=args.models_dir, mechanics=args.mechanics)
+                             random_policy=args.random, models_dir=args.models_dir,
+                             mechanics=args.mechanics, model_path=args.model)
             measured.append(stats)
             print()
             print(format_summary(stats))

@@ -201,6 +201,11 @@ class ArenaRenderer:
         self.should_close = False
         self.effects_enabled = effects
         self.mechanics_visible = False
+        #: How long the network driving the ship trained, drawn large top-right in the HUD, with the
+        #: file it came from in small type beneath. Set by the playback script, never by the env: in
+        #: a checkpoint time-lapse these are the only things on screen telling 100k from 400k steps.
+        self.model_label: str | None = None
+        self.model_source: str | None = None
         self.feedback = CombatFeedback()
         self.perception = PerceptionOverlay()
         self._stars = _make_starfield(ARENA_WIDTH, ARENA_HEIGHT)
@@ -693,6 +698,19 @@ class ArenaRenderer:
             self.font_small.render(hint, True, COLOR_TEXT_DIM),
             (self.surface_size[0] - 14 - self.font_small.size(hint)[0], 43),
         )
+        # Two lines rather than one: a checkpoint filename at HUD size runs ~550px and would print
+        # over the STYLE field. The number is what the viewer needs; the file is the provenance.
+        right = self.surface_size[0] - 14
+        if self.model_label:
+            surface.blit(
+                self.font_hud.render(self.model_label, True, COLOR_TEXT),
+                (right - self.font_hud.size(self.model_label)[0], 8),
+            )
+        if self.model_source:
+            surface.blit(
+                self.font_small.render(self.model_source, True, COLOR_TEXT_DIM),
+                (right - self.font_small.size(self.model_source)[0], 29),
+            )
 
     def _draw_observation_overlay(self, surface: pygame.Surface, env: Any) -> int:
         """Draw exactly what the agent sees: its targets, its heading, and the raw feature vector.

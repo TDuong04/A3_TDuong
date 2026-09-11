@@ -12,7 +12,7 @@ owner: unassigned
 blocks: []
 blocked_by: [A3-014]
 created: 2026-08-19
-updated: 2026-09-10
+updated: 2026-09-11
 ---
 
 # A3-018 — Ship creativity features beyond the brief
@@ -56,3 +56,26 @@ Purely visual effects must never touch simulation state, or evaluation stops mat
   models loaded and rendered, and mechanics PPO smoke training/save/reload passed
   for both control styles. Full-suite rerun was interrupted; no full-suite result
   is claimed for this integration.
+
+- 2026-09-11 — Branch `feat/a3-018-trained-mechanics-and-timelapse` (off A3-031 `6b0bfde`).
+  Two additions, both measured on seeds 0-29 beside a random policy on the same arenas:
+  - **Trained mechanics agents.** PPO per style on the shield/elite rules, 2M steps, seed 0,
+    commit `6b0bfde` (`logs/ppo_*_mechanics/run.json`), in `models/mechanics/`. Phase 1
+    cleared 28/30 (direct) and 30/30 (rotation) against 0/30 random. The rotation agent takes
+    1.77 shields and absorbs 1.67 hits per episode, and kills 0.80 elites; the direct agent
+    mostly ignores shields (0.23). Evidence: `results/arena_eval/mechanics/`.
+  - **Learning time-lapse.** `eval.play_arena --model <file>` replays any checkpoint with its
+    training-step count (read from `num_timesteps`) and filename in the HUD. `--timelapse`
+    tabulates every 50k snapshot of the shipped runs: direct clears phase 1 on 0/30 at 100k,
+    27/30 at 200k, 30/30 at 300k. The final rows reproduce `comparison.md` exactly (+20.57
+    28/30, +7.59 28/30). A checkpoint run writes to `results/arena_eval/checkpoints/` and can
+    never overwrite the row I table. `.gitignore` now tracks the 16 `*_shipped_*` snapshots the
+    time-lapse plays. The comparison table's reproduce line now carries `--episodes N --seed S`,
+    which also meets A3-032's third criterion (its other three remain open there).
+  - `report/creativity.md` rewritten as the final section draft with these numbers and their
+    limits (2M vs 400k budget, so no mechanics-vs-baseline claim; 36 features above the
+    appendix's 10-30 guidance). The report criterion stays open until A3-014 integrates it.
+  - Verification: full non-slow suite passed in the worktree after these changes, including 19
+    new tests (checkpoint loading, stale 21-feature checkpoint refused, row I table protected,
+    provenance and mechanics columns, time-lapse ordering and de-duplication, HUD label drawn
+    and clear of the fields).

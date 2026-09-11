@@ -80,6 +80,11 @@ python -m eval.play_arena --style direct --human       # G: play the same env fr
 python -m eval.play_arena --style direct --random      # the chance-level baseline; also what runs
                                                        # by itself when models/ is still empty
 python -m eval.play_arena --style both --no-window     # R6: writes results/arena_eval/
+python -m eval.play_arena --style direct --model models/checkpoints/ppo_direct_shipped_100000_steps.zip
+                                                       # replay one training snapshot; the HUD
+                                                       # shows how many steps it had trained
+python -m eval.play_arena --style both --timelapse --episodes 30   # every snapshot vs random
+python -m eval.play_arena --style rotation --mechanics # shields + elite chargers, trained agent
 tensorboard --logdir logs
 ```
 
@@ -150,7 +155,7 @@ window.
 | Gridworld HUD                               | level, steps, return, key held, items collected, speed                                                                                                               |
 | Gridworld **Learner** panel                 | algorithm name, alpha, gamma, the epsilon schedule and the episode budget that trained the policy on screen — read from the run's own summary, never from the config |
 | Gridworld overlays                          | greedy policy arrows (`P`), per-cell Q-value heatmap (`Q` / `H`)                                                                                                     |
-| Arena HUD                                   | phase, health, score, step, current action, control style                                                                                                            |
+| Arena HUD                                   | phase, health, score, step, current action, control style, and top right the training steps of the network driving the ship (plus the checkpoint file under `--model`) |
 | Arena **observation** overlay (`O` / `TAB`) | all 20 features live, plus lines to the nearest enemy and spawner and the ship-local heading                                                                         |
 | Arena **policy** overlay (`V`)              | the action probability the network assigned to every action, the one it chose, and the critic's `V(s)`                                                               |
 
@@ -172,6 +177,8 @@ cite these in the report rather than re-deriving numbers by hand.
 | [`results/arena_eval/comparison.md`](results/arena_eval/comparison.md)     | row I: the two control schemes measured head-to-head on the same seeded arenas                                                                |
 | [`results/arena_validation/validation.md`](results/arena_validation/validation.md) | row H: the observation vector stress-tested — per-feature ranges, dead/saturated features by name, determinism, termination and steps/second   |
 | [`results/arena_eval/comparison_random.md`](results/arena_eval/comparison_random.md) | row I: the same 30 seeded arenas under a uniform random policy — the baseline that makes "clears 28 of 30" mean something                       |
+| [`results/arena_eval/timelapse_*_seed0.md`](results/arena_eval/) | creativity: every 50k-step snapshot of both shipped runs on the same 30 arenas, from the random floor to the final model |
+| [`results/arena_eval/mechanics/`](results/arena_eval/mechanics/) | creativity: the trained shield/elite agents beside random on 30 arenas — shields taken, hits absorbed, elite kills |
 | [`docs/evaluations/`](docs/evaluations/)                                   | dated whole-project audits against the rubric, each pinned to the commit it measured                                                          |
 
 `results/` also holds the training curves, policy figures, per-run summaries, episode histories and
@@ -272,6 +279,6 @@ python -m eval.play_arena --human --style rotation --mechanics --seed 0
 
 Destroy spawners to drop shield orbs; collect one to absorb a hit. From phase 2, dodge the
 elite's telegraphed charge and defeat it to finish the phase. Both mechanics use the existing
-actions. Train new 36-feature policies with
-`python -m train.train_arena --style direct --mechanics` (repeat for rotation); they save under `models/mechanics/`. Omitting `--mechanics`
-keeps the baseline and existing checkpoints. See [mechanics rules and testing](docs/arena-mechanics.md).
+actions. A trained 36-feature agent per style is in `models/mechanics/` (2M steps each); watch
+one with `python -m eval.play_arena --style rotation --mechanics`. Omitting `--mechanics` keeps
+the baseline and its models. See [mechanics rules, training and results](docs/arena-mechanics.md).

@@ -9,9 +9,10 @@ exactly their existing action spaces; collection happens through movement.
 ```sh
 python -m eval.play_arena --human --style direct --mechanics --seed 0
 python -m eval.play_arena --human --style rotation --mechanics --seed 0
-python -m train.train_arena --style direct --mechanics
-python -m train.train_arena --style rotation --mechanics
-python -m eval.play_arena --style both --mechanics --no-window
+python -m train.train_arena --style direct --mechanics --timesteps 2000000 --checkpoint-freq 500000 --run-name ppo_direct_mechanics
+python -m train.train_arena --style rotation --mechanics --timesteps 2000000 --checkpoint-freq 500000 --run-name ppo_rotation_mechanics
+python -m eval.play_arena --style both --mechanics --no-window --episodes 30 --seed 0
+python -m eval.play_arena --style both --mechanics --no-window --episodes 30 --seed 0 --random
 ```
 
 Models go to `models/mechanics/<algo>_<style>.zip`; evaluation exports go to
@@ -64,14 +65,54 @@ relative-velocity features use the larger possible closing speed in mechanics mo
 
 All gameplay timers use FIXED_DT and spawn placement uses the environment's seeded RNG.
 Rendering only reads these states. No new action or image observation is introduced.
-Full mechanics training is required for useful new policies; the existing 20-feature
-checkpoints remain baseline artifacts. Short smoke-training tests demonstrate integration,
-not learned skill, balance, or performance improvement.
+The 20-feature models in `models/` remain the baseline agents that rubric row I grades; the
+mechanics agents below are separate models in `models/mechanics/`.
+
+## Trained agents
+
+One PPO agent per control style was trained on the mechanics rules with the baseline
+hyperparameters from `config/arena.yaml` (seed 0, 8 envs, `[64, 64]` MLP) for 2M timesteps,
+at commit `6b0bfde`. Provenance, including the resolved mechanics rules, is in
+`logs/ppo_{direct,rotation}_mechanics/run.json`; each run took under three minutes
+(156 s and 165 s). Snapshots every 500k steps are in `models/mechanics/checkpoints/`.
+
+Measured deterministically on seeds 0-29 by the two `eval.play_arena ... --mechanics` commands
+above (`results/arena_eval/mechanics/comparison.md` and `comparison_random.md`):
+
+| Style | Policy | Return | Phase 1 cleared | Phase reached | Shields collected | Hits blocked | Elite kills |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| direct | PPO | +29.59 ± 24.21 | 28/30 | 2.17 (best 3) | 0.23 | 0.23 | 0.23 |
+| direct | random | −12.85 ± 1.44 | 0/30 | 1.00 | 0.00 | 0.00 | 0.00 |
+| rotation | PPO | +30.72 ± 21.06 | 30/30 | 2.77 (best 4) | 1.77 | 1.67 | 0.80 |
+| rotation | random | −14.34 ± 1.76 | 0/30 | 1.00 | 0.07 | 0.07 | 0.00 |
+
+Per-episode means. What the numbers support, and what they do not:
+
+- Both agents learned the extended rules: every trained episode but two clears phase 1, which
+  under these rules also requires killing the six-health elite from phase 2 on, against 0/30
+  for chance on the same arenas.
+- The rotation agent uses the shield: 1.77 collected and 1.67 hits absorbed per episode, so
+  almost every orb it takes is spent on a hit it would otherwise have taken. Collecting earns no
+  reward, so this is instrumental behaviour learned through the damage and death penalties.
+- The direct agent mostly ignores orbs (0.23). A plausible reading, not a tested one: orbs drop
+  where spawners die, and the rotation agent fights at spawner range (5.37 spawners destroyed per
+  episode against 2.90), while the direct agent spends its time on enemies (25.83 kills).
+- Not claimed: that mechanics play is better or worse than baseline play. These agents trained
+  for five times the baseline's 400k-step budget, so no like-for-like comparison exists. The
+  36-feature observation is also above the 10-30 the brief's feasibility appendix suggests,
+  which is guidance rather than a requirement, and one more reason the graded row I models stay
+  the 20-feature ones.
 
 ## Demonstration and evidence
 
-Destroy a spawner, collect its S orb, and touch an enemy to show a blocked hit. In phase 2,
-show the elite's warning line, move sideways during wind-up, then shoot during recovery.
+Watch a trained agent play the extended rules, with the policy panel on (`V`):
+
+```sh
+python -m eval.play_arena --style rotation --mechanics --seed 0 --episodes 1 --no-save
+```
+
+By hand: destroy a spawner, collect its S orb, and touch an enemy to show a blocked hit. In
+phase 2, show the elite's warning line, move sideways during wind-up, then shoot during recovery.
 Clear the spawners while leaving the elite alive to demonstrate the phase gate, then kill it.
 Use O/Tab for observation features, E for cosmetic feedback, V for policy details, and Escape to exit.
 
@@ -79,6 +120,6 @@ Use O/Tab for observation features, E for cosmetic feedback, V for policy detail
 non-stacking and shield damage accounting, elite direction locking and wall recovery,
 phase gating, reset, normalized observations, both human control modes, rendered-versus-
 unrendered state/RNG invariance, PPO training/save/load, and isolated evaluation artifacts.
-Physical keyboard play and trained mechanics performance still require a separate demonstration.
+Trained performance is measured above; physical keyboard play is still verified by hand only.
 
 The report section draft is in `report/creativity.md`; integrate it into the final A3-014 report.
