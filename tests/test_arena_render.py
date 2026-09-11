@@ -33,13 +33,19 @@ from arena.env import ArenaEnv  # noqa: E402
 from arena.observation import describe  # noqa: E402
 from arena.render import (  # noqa: E402
     BANNER_SECONDS,
+    COLOR_ACCENT,
     COLOR_BULLET,
     COLOR_ENEMY,
+    COLOR_ENEMY_EYE,
+    COLOR_ENGINE_CORE,
+    COLOR_HEALTH,
     COLOR_OVERLAY_HEADING,
     COLOR_PLAYER,
+    COLOR_PLAYER_CANOPY,
     COLOR_SPAWNER,
     ArenaRenderConfig,
     ArenaRenderer,
+    _make_starfield,
 )
 
 
@@ -62,6 +68,22 @@ def pixels(surface: pygame.Surface) -> np.ndarray:
 
 def count_color(surface: pygame.Surface, color: tuple[int, int, int]) -> int:
     return int((pixels(surface) == np.array(color, dtype=np.uint8)).all(axis=2).sum())
+
+
+#: PHASE, HEALTH, SCORE and STEP are the digit_fields, in that order, in `_draw_hud`, each 132px
+#: apart starting at x=14. Wide and tall enough to hold every glyph `_draw_seven_segment` draws
+#: without reaching into the next field's column.
+_DIGIT_FIELD_X = {"PHASE": 14, "HEALTH": 146, "SCORE": 278, "STEP": 410}
+
+
+def digit_region(surface: pygame.Surface, field: str) -> np.ndarray:
+    """The pixel block a `_draw_hud` digit readout is drawn into, for `field` in `_DIGIT_FIELD_X`.
+
+    Reads pixels rather than trusting a font-render call, because the readouts are seven-segment
+    glyphs built from `pygame.draw.rect`, not text — there is no font call to record."""
+    x = _DIGIT_FIELD_X[field]
+    array = pixels(surface)
+    return array[26:48, x:x + 110].copy()
 
 
 class RecordingFont:
@@ -138,7 +160,72 @@ def test_a_destroyed_player_is_not_drawn(env, renderer):
     baseline = count_color(renderer.draw(env), COLOR_PLAYER)
     assert baseline > 0
     env.player.kill()
-    assert count_color(renderer.draw(env), COLOR_PLAYER) == 0
+    surface = renderer.draw(env)
+    # The canopy and the flame are drawn by the same method as the hull, so a wreck that kept
+    # either of them would leave a cockpit light burning over an empty arena.
+    assert count_color(surface, COLOR_PLAYER) == 0
+    assert count_color(surface, COLOR_PLAYER_CANOPY) == 0
+    assert count_color(surface, COLOR_ENGINE_CORE) == 0
+
+
+# --- character detail: the parts that are read from live entity state ---------------------------
+
+
+def test_the_thruster_flame_burns_only_while_the_ship_is_moving(env, renderer):
+    """The flame is driven by `player.speed`, not by "was thrust pressed" — so a ship coasting to
+    a stop cools down, and a stationary ship is unmistakably stationary."""
+    assert env.player.speed == 0.0
+    assert count_color(renderer.draw(env), COLOR_ENGINE_CORE) == 0
+
+    for _ in range(4):
+        env.step(int(DirectAction.RIGHT))
+    assert env.player.speed > 0.0
+    assert count_color(renderer.draw(env), COLOR_ENGINE_CORE) > 0
+
+
+def test_the_enemy_eye_tracks_the_direction_it_is_travelling(env):
+    """The eye is what makes a grunt read as a creature rather than a disc, and it is only worth
+    drawing if it points somewhere true: the direction the enemy is actually moving."""
+    # Clear of the player, which spawns centre-arena and is drawn on top of anything under it,
+    # and with the overlay off so its target line cannot clip the pixels being counted.
+    enemy = Enemy(env.player.x - 200.0, env.player.y - 120.0, health=1, speed=90.0)
+    enemy.vx, enemy.vy = 90.0, 0.0  # travelling due right
+    env.enemies = [enemy]
+    renderer = ArenaRenderer(
+        headless=True, config=ArenaRenderConfig(show_observation_overlay=False)
+    )
+
+    frame = pixels(renderer.draw(env))
+    ys, xs = np.nonzero((frame == np.array(COLOR_ENEMY_EYE, dtype=np.uint8)).all(axis=2))
+    assert xs.size > 0, "eye missing"
+    assert xs.mean() > enemy.x, "eye should sit on the leading side of the body"
+    assert abs(ys.mean() - (enemy.y + renderer.HUD_HEIGHT)) < enemy.radius
+
+
+def test_only_a_wounded_grunt_wears_a_health_bar(env, renderer):
+    """A full bar over every one-hit enemy in a swarm of forty is noise, and it buries the bars
+    that do carry information — so the bar appears when, and only when, the grunt has been hit."""
+    enemy = Enemy(env.player.x - 200.0, env.player.y - 120.0, health=2, speed=90.0)
+    env.enemies = [enemy]
+    unwounded = count_color(renderer.draw(env), COLOR_HEALTH)
+
+    enemy.take_damage(1)
+    assert count_color(renderer.draw(env), COLOR_HEALTH) > unwounded
+
+
+def test_the_starfield_is_fixed_and_private_to_the_renderer():
+    """Set dressing must not cost reproducibility: the stars come from a private generator, so
+    building a renderer cannot shift the global stream a seeded episode draws from."""
+    import random
+
+    random.seed(1234)
+    expected = [random.random() for _ in range(3)]
+
+    random.seed(1234)
+    first = ArenaRenderer(headless=True)
+    second = ArenaRenderer(headless=True)
+    assert [random.random() for _ in range(3)] == expected
+    assert first._stars == second._stars == _make_starfield(ARENA_WIDTH, ARENA_HEIGHT)
 
 
 # --- overlays and the HUD ---------------------------------------------------------------------------
@@ -163,16 +250,24 @@ def test_the_overlay_panel_is_driven_by_describe(env, renderer):
 
 
 def test_hud_reports_the_quantities_the_rubric_asks_to_see(env, renderer):
+    """PHASE, HEALTH, SCORE and STEP are seven-segment readouts (rubric-motivated: a digital
+    scoreboard reads as arcade, and the labels are unaffected), so their VALUES are checked by
+    pixel presence, not by a recorded font call; ACTION still goes through the font and is checked
+    the old way."""
     env.step(int(DirectAction.RIGHT))
     renderer.font_small = RecordingFont(renderer.font_small)
     renderer.font_hud = RecordingFont(renderer.font_hud)
-    renderer.draw(env)
+    surface = renderer.draw(env)
 
     drawn = renderer.font_small.drawn + renderer.font_hud.drawn
     for label in ("PHASE", "HEALTH", "SCORE", "STEP", "ACTION"):
         assert label in drawn
     assert env.action_name in drawn
-    assert str(env.steps) in drawn
+    for field in ("PHASE", "HEALTH", "SCORE", "STEP"):
+        region = digit_region(surface, field)
+        assert (region == np.array(COLOR_ACCENT, dtype=np.uint8)).all(axis=-1).any(), (
+            f"{field}'s readout drew no accent-coloured pixels"
+        )
 
 
 def test_the_hud_prints_the_phase_number_the_env_is_actually_in(env, renderer):
@@ -181,21 +276,59 @@ def test_the_hud_prints_the_phase_number_the_env_is_actually_in(env, renderer):
     phase-progression shot the video rubric asks for, and invisible to a test that only checks the
     word "PHASE" was drawn somewhere."""
     assert env.phase == 1
-    renderer.font_hud = RecordingFont(renderer.font_hud)
-    renderer.draw(env)
-    assert "1" in renderer.font_hud.drawn
-    assert "2" not in renderer.font_hud.drawn
+    # PHASE is a seven-segment readout, not text (see test_hud_reports_the_quantities...), so its
+    # value is checked by comparing the actual pixels of its glyph before and after the phase
+    # changes -- proof the number on screen moved, not just that some digit was drawn both times.
+    phase_1_glyph = digit_region(renderer.draw(env), "PHASE")
 
     for spawner in env.spawners:
         spawner.take_damage(spawner.health)
     env.step(int(DirectAction.NOOP))
     assert env.phase == 2
 
-    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    surface = renderer.draw(env)
+    phase_2_glyph = digit_region(surface, "PHASE")
+    assert not np.array_equal(phase_1_glyph, phase_2_glyph), "PHASE glyph did not change"
+    assert "PHASE 2" in renderer.font_banner.drawn, renderer.font_banner.drawn
+
+
+def test_the_victory_banner_shows_only_at_the_step_cap_while_alive(env, renderer):
+    """The complement of the game-over banner: `truncated`, not `terminated`, with the ship still
+    standing. Not shown mid-episode, not shown alongside a death at the same instant."""
     renderer.font_banner = RecordingFont(renderer.font_banner)
     renderer.draw(env)
-    assert "2" in renderer.font_hud.drawn
-    assert "PHASE 2" in renderer.font_banner.drawn, renderer.font_banner.drawn
+    assert "YOU SURVIVED!" not in renderer.font_banner.drawn
+
+    env.steps = env.max_episode_steps
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.draw(env)
+    assert "YOU SURVIVED!" in renderer.font_banner.drawn
+
+    # Reaching the cap does not itself matter if the ship died on the very same step.
+    env.player.kill()
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.draw(env)
+    assert "YOU SURVIVED!" not in renderer.font_banner.drawn
+    assert "GAME OVER" in renderer.font_banner.drawn
+
+
+def test_the_game_over_banner_shows_on_death_but_not_on_survival(env, renderer):
+    """No countdown to latch here, unlike the phase banner: `player.alive` stays False for the
+    rest of the episode, so the banner should hold for every frame death draws, not just one."""
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.draw(env)
+    assert "GAME OVER" not in renderer.font_banner.drawn
+
+    env.player.kill()
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.draw(env)
+    assert "GAME OVER" in renderer.font_banner.drawn
+
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    for _ in range(5):
+        renderer.draw(env)
+    assert "GAME OVER" in renderer.font_banner.drawn, "should not need a per-frame trigger"
 
 
 def test_phase_banner_latches_for_its_own_countdown(env, renderer):
@@ -240,6 +373,25 @@ def test_drawing_never_mutates_the_simulation(env, renderer):
     assert snapshot() == before
 
 
+def test_the_last_frame_is_held_so_the_death_explosion_can_play(env):
+    """A death drawn once is a death shown for a sixtieth of a second: on the video the ship
+    simply blinks out. The hold redraws the finished episode without stepping it."""
+    windowed = ArenaRenderer(headless=False)  # SDL_VIDEODRIVER=dummy: a window without a screen
+    try:
+        env.player.kill()
+        before = (env.steps, env.player.health, len(env.enemies))
+        assert windowed.hold(env, seconds=0.05) >= 2
+        assert (env.steps, env.player.health, len(env.enemies)) == before
+    finally:
+        windowed.close()
+
+
+def test_a_headless_run_holds_nothing(env, renderer):
+    """Headless callers — the eval tables, the figure capture — count their frames, so the hold
+    must not quietly add any."""
+    assert renderer.hold(env) == 0
+
+
 def test_a_full_episode_renders_without_error(env, renderer):
     """Exercises every branch a real playback hits: spawns, kills, damage, phase change, death."""
     for _ in range(400):
@@ -248,3 +400,38 @@ def test_a_full_episode_renders_without_error(env, renderer):
         if terminated or truncated:
             break
     renderer.close()
+
+
+# --- the title screen -------------------------------------------------------------------------
+
+
+def test_the_title_screen_draws_without_an_env(renderer):
+    """`draw_title` takes no `env` on purpose -- the title screen precedes an episode existing at
+    all, and a signature that needed one would be a hint this belongs in `play()` instead."""
+    surface = renderer.draw_title("direct")
+    assert count_color(surface, COLOR_ACCENT) > 0, "no title text drawn"
+
+
+def test_the_title_screen_names_the_control_style_and_mode(renderer):
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer.draw_title("rotation", mechanics=True)
+    drawn = " ".join(renderer.font_hud.drawn)
+    assert "ROTATION" in drawn
+    assert "SHIELD" in drawn
+
+
+def test_the_start_prompt_blinks_rather_than_staying_lit(renderer):
+    """A static prompt reads as part of the artwork; the point of blinking is that it reads as
+    waiting specifically for you. Checked by advancing wall time directly rather than by drawing
+    many real frames, since the blink period is defined in seconds, not frame count."""
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer._elapsed = 0.0
+    renderer.draw_title("direct")
+    lit = "PRESS SPACE TO START" in renderer.font_hud.drawn
+
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer._elapsed = 0.6  # one full blink period on from the first draw
+    renderer.draw_title("direct")
+    unlit = "PRESS SPACE TO START" in renderer.font_hud.drawn
+
+    assert lit != unlit, "the prompt should not be in the same on/off state one period later"

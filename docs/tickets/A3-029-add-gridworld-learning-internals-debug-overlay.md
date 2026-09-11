@@ -7,6 +7,7 @@ priority: P1
 rubric: Creativity
 points_at_risk: 5.0
 area: gridworld
+github: https://github.com/TDuong04/A3_TDuong/issues/54
 owner: unassigned
 blocks: []
 blocked_by: []
@@ -115,3 +116,4 @@ What was checked by running rather than by reading:
 Not re-verified line by line: the remaining self-ticked criteria above are the author's, and the
 panel's visual layout at various cell sizes has a test but has not been looked at by a human on
 this branch.
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/54
