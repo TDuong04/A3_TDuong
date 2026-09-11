@@ -51,6 +51,7 @@ import pygame
 from common.config import load_yaml
 
 from .constants import ARENA_HEIGHT, ARENA_WIDTH, FPS, OBS_DIM
+from .debug import REWARD_TERMS, ArenaDebugSnapshot
 from .observation import describe
 from .policy_view import PolicyView
 from .visuals import CombatFeedback, PerceptionOverlay
@@ -267,6 +268,7 @@ CONTROLS: tuple[tuple[str, str], ...] = (
     ("O / TAB", "observation overlay"),
     ("V", "policy overlay"),
     ("E", "effects"),
+    ("F3", "debug panel"),
     ("ESC", "quit"),
 )
 
@@ -308,6 +310,9 @@ class ArenaRenderer:
     #: Width of the observation panel drawn down the right-hand side when the overlay is on.
     OVERLAY_PANEL_WIDTH = 214
     MECHANICS_PANEL_WIDTH = 280
+    #: Width of the F3 debug panel (reward decomposition, transition status), a further column
+    #: right of the observation and mechanics panels.
+    DEBUG_PANEL_WIDTH = 340
 
     def __init__(
         self,
@@ -335,6 +340,7 @@ class ArenaRenderer:
         self.should_close = False
         self.effects_enabled = effects
         self.mechanics_visible = False
+        self.show_debug = False
         self.feedback = CombatFeedback()
         self.perception = PerceptionOverlay()
         self._stars = _make_starfield(ARENA_WIDTH, ARENA_HEIGHT)
@@ -360,7 +366,8 @@ class ArenaRenderer:
     def surface_size(self) -> tuple[int, int]:
         """Window size: HUD strip on top, playfield below, observation panel down the right."""
         return (ARENA_WIDTH + self.OVERLAY_PANEL_WIDTH
-                + (self.MECHANICS_PANEL_WIDTH if self.mechanics_visible else 0),
+                + (self.MECHANICS_PANEL_WIDTH if self.mechanics_visible else 0)
+                + (self.DEBUG_PANEL_WIDTH if self.show_debug else 0),
                 ARENA_HEIGHT + self.HUD_HEIGHT)
 
     def to_screen(self, x: float, y: float) -> tuple[int, int]:
@@ -368,10 +375,18 @@ class ArenaRenderer:
         return (int(round(x)), int(round(y + self.HUD_HEIGHT)))
 
     def _ensure_surface(self) -> pygame.Surface:
-        """Allocate the target surface. Only the windowed path touches the display."""
-        if self.surface is not None:
-            return self.surface
+        """Allocate the target surface, or reallocate it if a panel toggle changed its size.
+
+        `surface_size` is not constant across a session: `mechanics_visible` and `show_debug` can
+        each widen it after the first frame. Caching the surface unconditionally on `self.surface
+        is not None` left a session that toggled the debug panel drawing into a surface that never
+        grew to fit it, silently clipping everything past the old, narrower edge -- found by a
+        test asserting the drawn surface's actual size, not by reading this method and assuming
+        the cache was safe.
+        """
         size = self.surface_size
+        if self.surface is not None and self.surface.get_size() == size:
+            return self.surface
         if self.headless:
             self.surface = pygame.Surface(size)
         else:
@@ -404,12 +419,26 @@ class ArenaRenderer:
         self.show_policy_overlay = not self.show_policy_overlay
         return self.show_policy_overlay
 
-    def draw(self, env: Any, policy_view: PolicyView | None = None) -> pygame.Surface:
+    def toggle_debug(self) -> bool:
+        """Flip the F3 debug panel (reward decomposition, physics overlay) and report its state."""
+        self.show_debug = not self.show_debug
+        return self.show_debug
+
+    def draw(
+        self,
+        env: Any,
+        policy_view: PolicyView | None = None,
+        *,
+        debug_snapshot: ArenaDebugSnapshot | None = None,
+        policy_status: str = "No model diagnostics supplied",
+    ) -> pygame.Surface:
         """Render one frame of `env`. Returns the surface, so headless callers can inspect it.
 
         `policy_view` is what the agent's network computed for the observation on screen. It is
         optional because human play and the render tests have no model behind them; when it is
-        absent the policy panel is simply not drawn.
+        absent the policy panel is simply not drawn. `debug_snapshot` and `policy_status` feed the
+        F3 debug panel only -- both keyword-only with defaults, so every existing caller of `draw`
+        is unaffected.
         """
         self.mechanics_visible = env.mechanics
         surface = self._ensure_surface()
@@ -458,6 +487,9 @@ class ArenaRenderer:
             self.perception.draw_compass(surface, env)
         if env.mechanics:
             self._draw_mechanics_panel(surface, env)
+        if self.show_debug:
+            self._draw_debug_panel(surface, env, policy_view, debug_snapshot, policy_status)
+            self._draw_physics(surface, env)
         self._draw_hud(surface, env, policy_view)
         if self._banner_remaining > 0.0:
             self._draw_phase_banner(surface)
@@ -564,6 +596,8 @@ class ArenaRenderer:
                     self.toggle_effects()
                 elif event.key == pygame.K_v:
                     self.toggle_policy_overlay()
+                elif event.key == pygame.K_F3:
+                    self.toggle_debug()
 
     def _advance_effects(self, env: Any, dt: float) -> None:
         """Latch the one-step phase flag into a wall-clock countdown, and age the pulse timer."""
@@ -1033,6 +1067,87 @@ class ArenaRenderer:
                          (track_left, y))
             number = self.font_small.render(f"{view.value:+.2f}", True, COLOR_ACCENT)
             surface.blit(number, (track_left + track_width - number.get_width(), y))
+
+    def _text(
+        self, surface: pygame.Surface, text: str, x: int, y: int, color: tuple = COLOR_TEXT_DIM
+    ) -> None:
+        """One line of small text at an exact position -- the debug panel's only drawing idiom,
+        since every field on it is a label a marker reads, not a shape."""
+        surface.blit(self.font_small.render(text, True, color), (x, y))
+
+    def _draw_debug_panel(
+        self,
+        surface: pygame.Surface,
+        env: Any,
+        view: PolicyView | None,
+        snapshot: ArenaDebugSnapshot | None,
+        status: str,
+    ) -> None:
+        """The last completed transition's reward, term by term, against the constants it reads.
+
+        A fourth column beyond the observation and mechanics panels, so nothing about it disturbs
+        their layout. Reads `env.latest_reward` (a `RewardSnapshot`) when no snapshot is supplied
+        directly -- `eval/play_arena.py` passes one built from the exact observation that produced
+        the action; a caller with no policy to probe (human play, the render tests) still gets the
+        environment's own record of what just happened.
+        """
+        left = (ARENA_WIDTH + self.OVERLAY_PANEL_WIDTH
+                + (self.MECHANICS_PANEL_WIDTH if self.mechanics_visible else 0))
+        panel = pygame.Rect(left, self.HUD_HEIGHT, self.DEBUG_PANEL_WIDTH, ARENA_HEIGHT)
+        pygame.draw.rect(surface, COLOR_PANEL, panel)
+        x, y = left + 12, self.HUD_HEIGHT + 10
+        self._text(surface, "DEBUG: latest completed transition", x, y, COLOR_ACCENT)
+        y += 24
+        self._text(surface, status, x, y)
+        y += 22
+
+        reward = snapshot.reward if snapshot is not None else env.latest_reward
+        if reward is None:
+            self._text(surface, "No transition yet.", x, y)
+            return
+        self._text(surface, f"Step {reward.step}: {env.actions(reward.action).name}", x, y)
+        y += 28
+
+        self._text(surface, "REWARD", x, y, COLOR_ACCENT)
+        self._text(surface, "STEP", x + 190, y, COLOR_ACCENT)
+        self._text(surface, "EPISODE", x + 260, y, COLOR_ACCENT)
+        y += 22
+        contributions = dict(reward.contributions)
+        totals = dict(reward.totals)
+        for term, (label, weight) in REWARD_TERMS.items():
+            value = contributions.get(term, 0.0)
+            color = COLOR_TEXT if value else COLOR_TEXT_DIM
+            self._text(surface, f"{label} ({weight:+g})", x, y, color)
+            self._text(surface, f"{value:+.2f}", x + 190, y, color)
+            self._text(surface, f"{totals.get(term, 0.0):+.2f}", x + 260, y, color)
+            y += 22
+        y += 4
+        self._text(surface, f"step() reward = {reward.reward:+.6g}", x, y, COLOR_ACCENT)
+        y += 20
+        self._text(surface, f"terminated={reward.terminated}  truncated={reward.truncated}", x, y)
+        y += 20
+        self._text(surface, f"Episode total = {sum(totals.values()):+.6g}", x, y, COLOR_ACCENT)
+
+    def _draw_physics(self, surface: pygame.Surface, env: Any) -> None:
+        """Collision radii and enemy target lines, drawn crisp over the pixelated playfield.
+
+        Clipped to the field rect so a stray radius near the field's edge cannot draw into the
+        panel columns -- evidence overlays on this project stay inside the screen they describe.
+        """
+        field = pygame.Rect(0, self.HUD_HEIGHT, ARENA_WIDTH, ARENA_HEIGHT)
+        old_clip = surface.get_clip()
+        surface.set_clip(field)
+        for entity in (env.player, *env.enemies, *env.spawners, *env.bullets):
+            pygame.draw.circle(surface, COLOR_OVERLAY_HEADING,
+                               self.to_screen(entity.x, entity.y), max(1, round(entity.radius)), 1)
+        target = self.to_screen(env.player.x, env.player.y)
+        for enemy in env.enemies:
+            pygame.draw.line(surface, COLOR_OVERLAY_ENEMY,
+                             self.to_screen(enemy.x, enemy.y), target, 1)
+        for spawner in env.spawners:
+            x, y = self.to_screen(spawner.x, spawner.y + spawner.radius + 8)
+            self._text(surface, f"spawn {spawner.time_to_next_spawn:.2f}s", x - 40, y, COLOR_ACCENT)
+        surface.set_clip(old_clip)
 
     def _draw_phase_banner(self, surface: pygame.Surface) -> None:
         """A centred banner announcing the new phase, held by the renderer's own countdown."""
