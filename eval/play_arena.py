@@ -527,6 +527,8 @@ def play(
             renderer.draw(env, view)
             if max_frames is None:
                 renderer.hold(env, view)
+                if renderer.should_close:
+                    raise KeyboardInterrupt
             returns.append(float(env.episode_reward))
             phases.append(int(info.get("phase", 1)))
     except KeyboardInterrupt:
