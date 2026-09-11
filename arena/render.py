@@ -563,7 +563,11 @@ class ArenaRenderer:
         self._elapsed += dt
 
         surface.fill(COLOR_BACKGROUND)
-        field = pygame.Rect(0, self.HUD_HEIGHT, ARENA_WIDTH, ARENA_HEIGHT)
+        # The whole window, not just the game-field sub-rect `draw()` uses: there is no HUD strip
+        # or observation panel to reserve space for yet, so leaving them out of the bezel/pixelate
+        # pass left the title screen framed on the left with a bare, unbordered black margin on top
+        # and on the right. The title screen owns the full window instead.
+        field = pygame.Rect(0, 0, *self.surface_size)
         pygame.draw.rect(surface, COLOR_FIELD, field)
         self._draw_starfield(surface)
 
@@ -572,7 +576,7 @@ class ArenaRenderer:
         # as the starfield behind it rather than sitting crisp on top. The smaller lines below stay
         # off this pass, the same reason the HUD does -- at this font size the downscale round trip
         # blurs letterforms instead of chunking them, so it costs legibility without adding style.
-        mid_x, mid_y = ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2
+        mid_x, mid_y = self.surface_size[0] // 2, self.surface_size[1] // 2
         title = self.font_banner.render("A3 ARENA", True, COLOR_ACCENT)
         surface.blit(title, title.get_rect(center=(mid_x, mid_y - 70)))
 
