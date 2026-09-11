@@ -37,15 +37,7 @@ from gridworld.constants import Action, Tile  # noqa: E402
 from gridworld.env import GridWorld  # noqa: E402
 from gridworld.levels import N_LEVELS  # noqa: E402
 from gridworld.render import (  # noqa: E402
-    COLOR_AGENT,
-    COLOR_APPLE,
     COLOR_ARROW,
-    COLOR_CHEST,
-    COLOR_FIRE_CORE,
-    COLOR_FLOOR,
-    COLOR_KEY,
-    COLOR_MONSTER,
-    COLOR_ROCK,
     HUMAN_KEYS,
     GridRenderer,
     PlaybackApp,
@@ -116,24 +108,6 @@ TILE_LABELS: dict[str, str] = {
     Tile.CHEST: "chest",
 }
 
-#: The colour each label must be found in at a cell centre. Taken from the renderer's own palette
-#: rather than retyped, so a deliberate palette tweak moves both sides at once; what is under test
-#: is the tile-to-colour *mapping*, not the hex values. For reference, at `cell_size=56` these
-#: resolve to floor (46,50,62), rock (120,124,134), fire (244,158,66), apple (68,190,92),
-#: key (238,206,66), chest (146,96,44), monster (36,22,46), agent (74,148,236).
-EXPECTED_TILE_COLORS: dict[str, tuple[int, int, int]] = {
-    "floor": COLOR_FLOOR,
-    "rock": COLOR_ROCK,
-    # The flame core sits over the red block, and the core is what a centre sample hits.
-    "fire": COLOR_FIRE_CORE,
-    "apple": COLOR_APPLE,
-    "key": COLOR_KEY,
-    "chest": COLOR_CHEST,
-    "monster": COLOR_MONSTER,
-    "agent": COLOR_AGENT,
-}
-
-
 def cell_pixels(renderer: GridRenderer, surface: pygame.Surface, row: int, col: int) -> np.ndarray:
     """The `(width, height, 3)` RGB block for one cell. A copy, so it survives the next redraw."""
     rect = renderer._cell_rect(row, col)
@@ -148,14 +122,6 @@ def grid_pixels(renderer: GridRenderer, surface: pygame.Surface, env: GridWorld)
     return frame[0 : env.n_cols * cell, top : top + env.n_rows * cell]
 
 
-def cell_center_color(
-    renderer: GridRenderer, surface: pygame.Surface, row: int, col: int
-) -> tuple[int, int, int]:
-    """The single pixel at the middle of a cell — where every tile shape is centred."""
-    center = renderer._cell_rect(row, col).center
-    return tuple(int(channel) for channel in surface.get_at(center)[:3])
-
-
 def arrow_mask(block: np.ndarray) -> np.ndarray:
     """Boolean map of the pixels drawn in the policy-arrow colour."""
     return np.all(block == np.array(COLOR_ARROW, dtype=block.dtype), axis=-1)
@@ -163,29 +129,6 @@ def arrow_mask(block: np.ndarray) -> np.ndarray:
 
 def count_arrow_pixels(block: np.ndarray) -> int:
     return int(arrow_mask(block).sum())
-
-
-def sampled_tile_colors(
-    renderer: GridRenderer, surface: pygame.Surface, env: GridWorld
-) -> dict[str, tuple[int, int, int]]:
-    """Cell-centre colour for one representative cell of every tile type the level contains.
-
-    The agent and the monsters are drawn on top of whatever tile they stand on, so their cells are
-    excluded from the static sweep and sampled separately under their own labels.
-    """
-    occupied = {env.agent_pos, *env.monster_positions}
-    found: dict[str, tuple[int, int, int]] = {}
-    for row in range(env.n_rows):
-        for col in range(env.n_cols):
-            if (row, col) in occupied:
-                continue
-            label = TILE_LABELS.get(env.tile_at(row, col))
-            if label is not None and label not in found:
-                found[label] = cell_center_color(renderer, surface, row, col)
-    found["agent"] = cell_center_color(renderer, surface, *env.agent_pos)
-    if env.monster_positions:
-        found["monster"] = cell_center_color(renderer, surface, *env.monster_positions[0])
-    return found
 
 
 # --- surface allocation -------------------------------------------------------------------------
@@ -224,8 +167,10 @@ def test_every_level_draws(renderer, level):
 
     assert surface.get_size() == renderer.surface_size(env.n_rows, env.n_cols)
     grid = grid_pixels(renderer, surface, env)
-    assert np.all(grid == np.array(COLOR_FLOOR, dtype=grid.dtype), axis=-1).any(), "no floor drawn"
-    assert cell_center_color(renderer, surface, *env.agent_pos) == COLOR_AGENT
+    assert np.unique(grid.reshape(-1, 3), axis=0).shape[0] > 10, "textures missing"
+    agent = cell_pixels(renderer, surface, *env.agent_pos)
+    floor = pygame.surfarray.array3d(renderer.sprites["background"])
+    assert not np.array_equal(agent[1:-1, 1:-1], floor[1:-1, 1:-1])
 
 
 @pytest.mark.parametrize("level", range(N_LEVELS))
@@ -312,6 +257,7 @@ def test_heatmap_handles_degenerate_value_ranges(renderer, values):
         for row in range(env.n_rows)
         for col in range(env.n_cols)
     }
+    before = grid_pixels(renderer, renderer.draw(env), env).copy()
     renderer.show_q_values = True
 
     surface = renderer.draw(env, table)
@@ -319,33 +265,34 @@ def test_heatmap_handles_degenerate_value_ranges(renderer, values):
     assert surface.get_size() == renderer.surface_size(env.n_rows, env.n_cols)
     # "Still shade" is the whole point: no plain floor may survive under a fully covered table.
     grid = grid_pixels(renderer, surface, env)
-    assert not np.all(grid == np.array(COLOR_FLOOR, dtype=grid.dtype), axis=-1).any()
+    assert not np.array_equal(before, grid)
 
 
 # --- what actually reaches the pixels -------------------------------------------------------------
 
 
 @pytest.mark.parametrize("level", range(N_LEVELS))
-def test_tile_colours_are_distinct_from_the_floor_and_from_each_other(pixel_renderer, level):
-    """Every tile type the level contains must arrive on screen in its own colour.
-
-    Two failure modes this is aimed at, both of which leave the renderer running happily: a tile
-    drawn in the floor colour (invisible), and two different tiles sharing one shape (an apple and a
-    chest that a marker cannot tell apart). Distinctness is the assertion that matters; the mapping
-    check alongside it is what names the offender when it breaks.
-    """
+def test_tile_images_match_their_environment_objects(pixel_renderer, level):
+    """Compare whole tile interiors, including alpha compositing, rather than old palette dots."""
     env = GridWorld(level_index=level, seed=0)
     surface = pixel_renderer.draw(env)
-
-    found = sampled_tile_colors(pixel_renderer, surface, env)
-    assert "floor" in found and "agent" in found, "every level has open floor and a start tile"
-
-    for label, color in found.items():
-        assert color == EXPECTED_TILE_COLORS[label], f"{label} drawn in {color}"
-        if label != "floor":
-            assert color != found["floor"], f"{label} is indistinguishable from the floor"
-
-    assert len(set(found.values())) == len(found), f"two tile types share a colour: {found}"
+    cell = pixel_renderer.config.cell_size
+    for row in range(env.n_rows):
+        for col in range(env.n_cols):
+            label = TILE_LABELS.get(env.tile_at(row, col), "floor")
+            expected = pygame.Surface((cell, cell))
+            expected.blit(pixel_renderer.sprites["rock" if label == "rock" else "background"], (0, 0))
+            layers = [] if label in ("floor", "rock") else [label]
+            if (row, col) in env.monster_positions:
+                layers.append("monster")
+            if (row, col) == env.agent_pos:
+                layers.append("agent")
+            for name in layers:
+                sprite = pixel_renderer.sprites[name]
+                expected.blit(sprite, sprite.get_rect(center=(cell // 2, cell // 2)))
+            actual = cell_pixels(pixel_renderer, surface, row, col)
+            np.testing.assert_array_equal(actual[1:-1, 1:-1],
+                                          pygame.surfarray.array3d(expected)[1:-1, 1:-1])
 
 
 @pytest.mark.parametrize("level", range(N_LEVELS))

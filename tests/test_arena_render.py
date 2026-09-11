@@ -17,6 +17,7 @@ for as long as it took to find.
 
 from __future__ import annotations
 
+import math
 import os
 from typing import Any
 
@@ -40,9 +41,6 @@ from arena.render import (  # noqa: E402
     COLOR_ENGINE_CORE,
     COLOR_HEALTH,
     COLOR_OVERLAY_HEADING,
-    COLOR_PLAYER,
-    COLOR_PLAYER_CANOPY,
-    COLOR_SPAWNER,
     ArenaRenderConfig,
     ArenaRenderer,
     _make_starfield,
@@ -136,36 +134,42 @@ def test_render_config_comes_from_the_yaml():
 # --- entities reach the screen --------------------------------------------------------------------
 
 
-def test_every_entity_type_is_drawn_in_its_own_colour(env, renderer):
+def test_every_entity_type_is_drawn(env, renderer):
     env.enemies.append(Enemy(env.player.x + 90.0, env.player.y, health=1, speed=90.0))
     env.step(int(DirectAction.SHOOT))
     surface = renderer.draw(env)
 
-    assert count_color(surface, COLOR_PLAYER) > 0, "ship missing"
     assert count_color(surface, COLOR_ENEMY) > 0, "enemy missing"
-    assert count_color(surface, COLOR_SPAWNER) > 0, "spawner missing"
     assert count_color(surface, COLOR_BULLET) > 0, "bullet missing"
+    # Inspect image entities separately; their artwork now shares white pixels.
+    for draw, entity in ((renderer._draw_player, env.player),
+                         (renderer._draw_spawner, env.spawners[0])):
+        canvas = pygame.Surface(renderer.surface_size, pygame.SRCALPHA)
+        draw(canvas, entity)
+        assert count_color(canvas, (255, 255, 255)) > 0, "sprite missing"
 
 
-def test_the_ship_is_a_triangle_pointing_along_its_heading(renderer, env):
-    env.player.heading = 0.0
-    points = renderer._ship_points(env.player)
-    assert len(points) == 3
-    nose = points[0]
-    # The nose leads on +x when the heading is 0, and reaches further than the rear corners do.
-    assert nose[0] > points[1][0] and nose[0] > points[2][0]
+@pytest.mark.parametrize("heading,offset", [(0, (2, 0)), (math.pi / 2, (0, 2)),
+                                          (math.pi, (-2, 0)), (-math.pi / 2, (0, -2))])
+def test_the_ship_image_points_along_its_heading(renderer, env, heading, offset):
+    # An up-pointing marker isolates the image-to-physics rotation convention.
+    renderer.agent_sprite = pygame.Surface((5, 5), pygame.SRCALPHA)
+    renderer.agent_sprite.set_at((2, 0), (255, 0, 255, 255))
+    env.player.heading = heading
+    canvas = pygame.Surface(renderer.surface_size, pygame.SRCALPHA)
+    renderer._draw_player(canvas, env.player)
+    x, y = renderer.to_screen(env.player.x, env.player.y)
+    assert canvas.get_at((x + offset[0], y + offset[1])) == (255, 0, 255, 255)
 
 
 def test_a_destroyed_player_is_not_drawn(env, renderer):
-    baseline = count_color(renderer.draw(env), COLOR_PLAYER)
-    assert baseline > 0
+    canvas = pygame.Surface(renderer.surface_size, pygame.SRCALPHA)
+    renderer._draw_player(canvas, env.player)
+    assert pygame.mask.from_surface(canvas).count() > 0
     env.player.kill()
-    surface = renderer.draw(env)
-    # The canopy and the flame are drawn by the same method as the hull, so a wreck that kept
-    # either of them would leave a cockpit light burning over an empty arena.
-    assert count_color(surface, COLOR_PLAYER) == 0
-    assert count_color(surface, COLOR_PLAYER_CANOPY) == 0
-    assert count_color(surface, COLOR_ENGINE_CORE) == 0
+    canvas.fill((0, 0, 0, 0))
+    renderer._draw_player(canvas, env.player)
+    assert pygame.mask.from_surface(canvas).count() == 0
 
 
 # --- character detail: the parts that are read from live entity state ---------------------------
