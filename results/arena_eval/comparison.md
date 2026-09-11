@@ -1,6 +1,6 @@
 # Arena control-scheme comparison
 
-Generated 2026-09-09T10:38:03+00:00 by `python -m eval.play_arena --style both --no-window`.
+Generated 2026-09-11T17:26:45+00:00 by `python -m eval.play_arena --style both --no-window --episodes 30`.
 
 Deterministic policy (`deterministic=True`), both styles evaluated on the same seed sequence so they meet the same arenas.
 
