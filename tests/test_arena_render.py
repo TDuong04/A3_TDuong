@@ -35,11 +35,16 @@ from arena.render import (  # noqa: E402
     BANNER_SECONDS,
     COLOR_BULLET,
     COLOR_ENEMY,
+    COLOR_ENEMY_EYE,
+    COLOR_ENGINE_CORE,
+    COLOR_HEALTH,
     COLOR_OVERLAY_HEADING,
     COLOR_PLAYER,
+    COLOR_PLAYER_CANOPY,
     COLOR_SPAWNER,
     ArenaRenderConfig,
     ArenaRenderer,
+    _make_starfield,
 )
 
 
@@ -138,7 +143,72 @@ def test_a_destroyed_player_is_not_drawn(env, renderer):
     baseline = count_color(renderer.draw(env), COLOR_PLAYER)
     assert baseline > 0
     env.player.kill()
-    assert count_color(renderer.draw(env), COLOR_PLAYER) == 0
+    surface = renderer.draw(env)
+    # The canopy and the flame are drawn by the same method as the hull, so a wreck that kept
+    # either of them would leave a cockpit light burning over an empty arena.
+    assert count_color(surface, COLOR_PLAYER) == 0
+    assert count_color(surface, COLOR_PLAYER_CANOPY) == 0
+    assert count_color(surface, COLOR_ENGINE_CORE) == 0
+
+
+# --- character detail: the parts that are read from live entity state ---------------------------
+
+
+def test_the_thruster_flame_burns_only_while_the_ship_is_moving(env, renderer):
+    """The flame is driven by `player.speed`, not by "was thrust pressed" — so a ship coasting to
+    a stop cools down, and a stationary ship is unmistakably stationary."""
+    assert env.player.speed == 0.0
+    assert count_color(renderer.draw(env), COLOR_ENGINE_CORE) == 0
+
+    for _ in range(4):
+        env.step(int(DirectAction.RIGHT))
+    assert env.player.speed > 0.0
+    assert count_color(renderer.draw(env), COLOR_ENGINE_CORE) > 0
+
+
+def test_the_enemy_eye_tracks_the_direction_it_is_travelling(env):
+    """The eye is what makes a grunt read as a creature rather than a disc, and it is only worth
+    drawing if it points somewhere true: the direction the enemy is actually moving."""
+    # Clear of the player, which spawns centre-arena and is drawn on top of anything under it,
+    # and with the overlay off so its target line cannot clip the pixels being counted.
+    enemy = Enemy(env.player.x - 200.0, env.player.y - 120.0, health=1, speed=90.0)
+    enemy.vx, enemy.vy = 90.0, 0.0  # travelling due right
+    env.enemies = [enemy]
+    renderer = ArenaRenderer(
+        headless=True, config=ArenaRenderConfig(show_observation_overlay=False)
+    )
+
+    frame = pixels(renderer.draw(env))
+    ys, xs = np.nonzero((frame == np.array(COLOR_ENEMY_EYE, dtype=np.uint8)).all(axis=2))
+    assert xs.size > 0, "eye missing"
+    assert xs.mean() > enemy.x, "eye should sit on the leading side of the body"
+    assert abs(ys.mean() - (enemy.y + renderer.HUD_HEIGHT)) < enemy.radius
+
+
+def test_only_a_wounded_grunt_wears_a_health_bar(env, renderer):
+    """A full bar over every one-hit enemy in a swarm of forty is noise, and it buries the bars
+    that do carry information — so the bar appears when, and only when, the grunt has been hit."""
+    enemy = Enemy(env.player.x - 200.0, env.player.y - 120.0, health=2, speed=90.0)
+    env.enemies = [enemy]
+    unwounded = count_color(renderer.draw(env), COLOR_HEALTH)
+
+    enemy.take_damage(1)
+    assert count_color(renderer.draw(env), COLOR_HEALTH) > unwounded
+
+
+def test_the_starfield_is_fixed_and_private_to_the_renderer():
+    """Set dressing must not cost reproducibility: the stars come from a private generator, so
+    building a renderer cannot shift the global stream a seeded episode draws from."""
+    import random
+
+    random.seed(1234)
+    expected = [random.random() for _ in range(3)]
+
+    random.seed(1234)
+    first = ArenaRenderer(headless=True)
+    second = ArenaRenderer(headless=True)
+    assert [random.random() for _ in range(3)] == expected
+    assert first._stars == second._stars == _make_starfield(ARENA_WIDTH, ARENA_HEIGHT)
 
 
 # --- overlays and the HUD ---------------------------------------------------------------------------
@@ -238,6 +308,25 @@ def test_drawing_never_mutates_the_simulation(env, renderer):
     for _ in range(10):
         renderer.draw(env)
     assert snapshot() == before
+
+
+def test_the_last_frame_is_held_so_the_death_explosion_can_play(env):
+    """A death drawn once is a death shown for a sixtieth of a second: on the video the ship
+    simply blinks out. The hold redraws the finished episode without stepping it."""
+    windowed = ArenaRenderer(headless=False)  # SDL_VIDEODRIVER=dummy: a window without a screen
+    try:
+        env.player.kill()
+        before = (env.steps, env.player.health, len(env.enemies))
+        assert windowed.hold(env, seconds=0.05) >= 2
+        assert (env.steps, env.player.health, len(env.enemies)) == before
+    finally:
+        windowed.close()
+
+
+def test_a_headless_run_holds_nothing(env, renderer):
+    """Headless callers — the eval tables, the figure capture — count their frames, so the hold
+    must not quietly add any."""
+    assert renderer.hold(env) == 0
 
 
 def test_a_full_episode_renders_without_error(env, renderer):

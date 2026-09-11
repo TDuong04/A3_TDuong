@@ -59,6 +59,7 @@ class CombatFeedback:
 
     def reset(self):
         self.events: list[Effect] = []
+        self._scratch = None
         self._player = None
         self._step = -1
         self._health = {}
@@ -75,6 +76,12 @@ class CombatFeedback:
 
         Retain previous entities for one sample to inspect deaths removed by the
         environment's collision cleanup. Disappearing living entities are not kills.
+
+        Effects age in wall time, one `advance` per drawn frame, which assumes the caller draws
+        every step. A caller that does not — the report's figure capture steps hundreds of times
+        between frames — would otherwise show a collage of muzzle flashes and explosions from
+        moments long past, pinned wherever the ship happened to be. Skipped simulation therefore
+        discards what is on the effect layer: those marks describe a moment that has gone.
         """
         if self._player is not env.player or env.steps < self._step:
             self.reset()
@@ -82,6 +89,9 @@ class CombatFeedback:
         elif env.steps == self._step:
             return
         else:
+            if env.steps - self._step > 1:
+                self.events.clear()
+                self.shake_remaining = 0.0
             if (set(env.bullets) - self._bullets
                     or env.player.shoot_cooldown_remaining > self._cooldown + 1e-9):
                 p = env.player
@@ -116,27 +126,45 @@ class CombatFeedback:
         return (round(strength * math.cos(elapsed * 91)),
                 round(strength * math.sin(elapsed * 73)))
 
+    def _layer(self, size):
+        """A cached transparent scratch surface the size of the playfield."""
+        if self._scratch is None or self._scratch.get_size() != size:
+            self._scratch = pygame.Surface(size, pygame.SRCALPHA)
+        return self._scratch
+
     def draw(self, surface):
+        """Composite every live effect in one alpha-blended pass.
+
+        Effects fade by *alpha*, not by scaling their colour toward black. Fading toward black
+        only looks like a fade against the empty playfield: drawn over the ship or an enemy, the
+        same pixels read as a dirty grey blob smeared across a sprite. Alpha keeps a fresh flash
+        fully bright and lets an old one disappear into whatever is underneath it.
+        """
+        if not self.events:
+            return
+        layer = self._layer(surface.get_size())
+        layer.fill((0, 0, 0, 0))
         for event in self.events:
             fraction = 1 - event.age / event.duration
-            color = tuple(round(channel * fraction) for channel in FLASH)
+            color = (*FLASH, round(255 * fraction))
             x, y = event.position
             if event.kind == 'muzzle':
                 dx, dy = math.cos(event.heading), math.sin(event.heading)
-                pygame.draw.polygon(surface, color, [
+                pygame.draw.polygon(layer, color, [
                     (x + 17 * dx, y + 17 * dy),
                     (x - 5 * dy, y + 5 * dx), (x + 5 * dy, y - 5 * dx),
                 ])
             elif event.kind == 'hit':
                 # Two short bright pulses read as hit flicker without changing entity colors.
                 if int(event.age / event.duration * 4) % 2 == 0:
-                    pygame.draw.circle(surface, color, (x, y), 19, width=3)
+                    pygame.draw.circle(layer, color, (x, y), 19, width=3)
             else:
                 distance = event.age * self.config.particle_speed
                 for index in range(self.config.particle_count):
                     angle = index * math.tau / self.config.particle_count
                     position = (x + math.cos(angle) * distance, y + math.sin(angle) * distance)
-                    pygame.draw.circle(surface, color, position, max(1, round(4 * fraction)))
+                    pygame.draw.circle(layer, color, position, max(1, round(4 * fraction)))
+        surface.blit(layer, (0, 0))
 
 
 class PerceptionOverlay:

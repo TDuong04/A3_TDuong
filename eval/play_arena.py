@@ -493,7 +493,13 @@ def play(
 
                 obs, _, terminated, truncated, info = env.step(action)
                 done = terminated or truncated
-            renderer.draw(env)  # the final frame: the death or the clock running out
+            # The final frame: the death or the clock running out. Held for a beat so the death
+            # explosion actually plays; `max_frames` runs are capturing a fixed number of frames
+            # and are left alone. The view is the one that produced the last action, so the policy
+            # panel stays up through the hold instead of blinking off for the closing shot.
+            renderer.draw(env, view)
+            if max_frames is None:
+                renderer.hold(env, view)
             returns.append(float(env.episode_reward))
             phases.append(int(info.get("phase", 1)))
     except KeyboardInterrupt:

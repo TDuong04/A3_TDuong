@@ -71,6 +71,27 @@ def test_effects_clear_on_reset_replacement_and_toggle():
     renderer.close()
 
 
+def test_an_effect_fades_by_alpha_rather_than_smearing_the_sprite_it_covers():
+    """A fading effect must lighten toward whatever is beneath it, never toward black.
+
+    Scaling the colour toward black reads as a fade only against the empty playfield. Drawn over
+    the ship — which is exactly where a muzzle flash lands, every single shot — the same pixels
+    paint a dirty grey wedge across the hull for the whole of the flash's life.
+    """
+    hull = (74, 148, 236)  # arena.render.COLOR_PLAYER: darker in green than FLASH is
+    surface = pygame.Surface((120, 120))
+    surface.fill(hull)
+    feedback = CombatFeedback()
+    feedback._emit('hit', (60, 60), 0.2)
+    feedback.advance(0.1)  # half spent: washing out, not darkening
+    feedback.draw(surface)
+
+    green = pygame.surfarray.array3d(surface)[:, :, 1]
+    assert green.min() >= hull[1], 'a fading effect darkened the sprite underneath it'
+    assert green.max() > hull[1], 'the effect never reached the surface at all'
+    assert pixels(surface, FLASH) == 0, 'a half-spent effect should not still be fully opaque'
+
+
 def test_effect_capacity_and_disappearing_living_entities():
     scene = combat_scene("direct")
     feedback = CombatFeedback()
