@@ -8,9 +8,9 @@ Contract:
 `GridRenderer(cell_size, fps)` owns the pygame surface and draws a `GridWorld` on demand. No
 gameplay logic here, and nothing in `env.py` may import pygame.
 
-Draw with simple shapes (the brief explicitly permits this): rocks as grey blocks, fire as red,
-monsters as dark triangles, apples as green circles, the key as a yellow shape, the chest as a
-brown box, the agent as a blue circle. Colour-code the agent when it is holding the key.
+Draw the supplied Minecraft-style textures and sprites from assets/gridworld. The explorer
+keeps a gold ring while holding the key and a red cross when dead. Image loading and drawing
+are renderer-owned and never change simulation state.
 
 Animate the agent sliding between cells rather than teleporting — "animated" is in the rubric
 wording, and it also makes the video far more legible.
@@ -53,6 +53,7 @@ import argparse
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -286,6 +287,26 @@ class GridRenderer:
         self.font_small = pygame.font.Font(None, max(14, int(cell * 0.30)))
         self.font_title = pygame.font.Font(None, max(18, int(cell * 0.46)))
 
+        assets = Path(__file__).resolve().parents[1] / "assets" / "gridworld"
+        self.sprites: dict[str, pygame.Surface] = {}
+        for name in ("background", "rock", "fire", "apple", "key", "chest", "monster", "agent"):
+            # No convert_alpha(): image loading must also work without a display.
+            sprite = pygame.image.load(str(assets / f"{name}.png"))
+            if name in ("background", "rock"):
+                # Centre-crop textures to square tiles without distorting their pixels.
+                side = min(sprite.get_size())
+                crop = pygame.Rect(0, 0, side, side)
+                crop.center = sprite.get_rect().center
+                sprite = sprite.subsurface(crop)
+                size = (cell, cell)
+            else:
+                sprite = sprite.subsurface(sprite.get_bounding_rect())
+                extent = cell * (0.72 if name in ("agent", "monster", "fire") else 0.62)
+                scale = extent / max(sprite.get_size())
+                size = (max(1, round(sprite.get_width() * scale)),
+                        max(1, round(sprite.get_height() * scale)))
+            self.sprites[name] = pygame.transform.scale(sprite, size)
+
         self.surface: pygame.Surface | None = None
         self._clock: pygame.time.Clock | None = None
 
@@ -451,71 +472,28 @@ class GridRenderer:
         return surface
 
     def _draw_floor(self, surface: pygame.Surface, env: GridWorld) -> None:
-        """Floor and rocks: grey blocks for rocks, plain floor everywhere else."""
+        """Grass and stone textures fill each tile beneath the learning overlays."""
         for row in range(env.n_rows):
             for col in range(env.n_cols):
                 rect = self._cell_rect(row, col)
                 if env.tile_at(row, col) == Tile.ROCK:
-                    pygame.draw.rect(surface, COLOR_ROCK, rect)
-                    pygame.draw.rect(surface, COLOR_ROCK_EDGE, rect, width=2)
+                    surface.blit(self.sprites["rock"], rect)
                 else:
-                    pygame.draw.rect(surface, COLOR_FLOOR, rect)
+                    surface.blit(self.sprites["background"], rect)
+
+    def _blit_sprite(self, surface: pygame.Surface, name: str,
+                     center: tuple[float, float]) -> None:
+        sprite = self.sprites[name]
+        surface.blit(sprite, sprite.get_rect(center=(round(center[0]), round(center[1]))))
 
     def _draw_items(self, surface: pygame.Surface, env: GridWorld) -> None:
-        """One simple shape per tile type, as the brief permits."""
+        """Draw the matching collectible or hazard at its current environment position."""
+        names = {Tile.FIRE: "fire", Tile.APPLE: "apple", Tile.KEY: "key", Tile.CHEST: "chest"}
         for row in range(env.n_rows):
             for col in range(env.n_cols):
-                rect = self._cell_rect(row, col)
-                tile = env.tile_at(row, col)
-                if tile == Tile.FIRE:
-                    self._draw_fire(surface, rect)
-                elif tile == Tile.APPLE:
-                    pygame.draw.circle(surface, COLOR_APPLE, rect.center, rect.width * 0.26)
-                    pygame.draw.circle(
-                        surface, (28, 96, 44), rect.center, rect.width * 0.26, width=2
-                    )
-                elif tile == Tile.KEY:
-                    self._draw_key(surface, rect)
-                elif tile == Tile.CHEST:
-                    self._draw_chest(surface, rect)
-
-    def _draw_fire(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        pygame.draw.rect(surface, COLOR_FIRE, rect.inflate(-rect.width * 0.12, -rect.height * 0.12))
-        cx, cy = rect.center
-        h = rect.height * 0.30
-        pygame.draw.polygon(
-            surface,
-            COLOR_FIRE_CORE,
-            [(cx, cy - h), (cx + h * 0.62, cy + h * 0.7), (cx - h * 0.62, cy + h * 0.7)],
-        )
-
-    def _draw_key(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        cx, cy = rect.center
-        r = rect.width * 0.14
-        pygame.draw.circle(surface, COLOR_KEY, (cx - r, cy), r, width=max(2, int(r * 0.6)))
-        pygame.draw.line(
-            surface, COLOR_KEY, (cx - r * 0.2, cy), (cx + r * 2.1, cy), max(2, int(r * 0.5))
-        )
-        pygame.draw.line(
-            surface,
-            COLOR_KEY,
-            (cx + r * 1.7, cy),
-            (cx + r * 1.7, cy + r * 0.9),
-            max(2, int(r * 0.5)),
-        )
-
-    def _draw_chest(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        box = rect.inflate(-rect.width * 0.34, -rect.height * 0.44)
-        box.centery = rect.centery + int(rect.height * 0.05)
-        pygame.draw.rect(surface, COLOR_CHEST, box, border_radius=3)
-        pygame.draw.rect(surface, COLOR_CHEST_TRIM, box, width=2, border_radius=3)
-        pygame.draw.line(
-            surface,
-            COLOR_CHEST_TRIM,
-            (box.left, box.centery),
-            (box.right, box.centery),
-            2,
-        )
+                name = names.get(env.tile_at(row, col))
+                if name is not None:
+                    self._blit_sprite(surface, name, self._cell_rect(row, col).center)
 
     def _draw_grid_lines(self, surface: pygame.Surface, env: GridWorld) -> None:
         cell = self.config.cell_size
@@ -604,43 +582,23 @@ class GridRenderer:
         )
 
     def _draw_monsters(self, surface: pygame.Surface) -> None:
-        """Dark triangles, interpolated like the agent — monsters teleporting is what makes a
-        stochastic level look broken on video."""
-        cell = self.config.cell_size
+        """Creeper sprites follow the existing interpolated monster movement."""
         for index, target in enumerate(self._to_monsters):
             start = self._from_monsters[index] if index < len(self._from_monsters) else target
             row, col = self._interpolated(start, target)
-            cx, cy = self._center_of(row, col)
-            h = cell * 0.30
-            pygame.draw.polygon(
-                surface,
-                COLOR_MONSTER,
-                [(cx, cy - h), (cx + h * 0.95, cy + h * 0.8), (cx - h * 0.95, cy + h * 0.8)],
-            )
-            pygame.draw.circle(surface, COLOR_MONSTER_EYE, (cx - h * 0.3, cy + h * 0.2), h * 0.13)
-            pygame.draw.circle(surface, COLOR_MONSTER_EYE, (cx + h * 0.3, cy + h * 0.2), h * 0.13)
+            self._blit_sprite(surface, "monster", self._center_of(row, col))
 
     def _draw_agent(self, surface: pygame.Surface, env: GridWorld) -> None:
-        """Blue circle; a gold ring plus a lighter fill whenever the key is held (A1 asks for the
-        holding-the-key state to be visually distinct)."""
+        """Explorer sprite with a gold key ring and a red death cross."""
         assert self._to_agent is not None and self._from_agent is not None
         row, col = self._interpolated(self._from_agent, self._to_agent)
         cx, cy = self._center_of(row, col)
-        radius = self.config.cell_size * 0.30
-
-        if env.died:
-            body = COLOR_AGENT_DEAD
-        elif env.has_key:
-            body = COLOR_AGENT_KEYED
-        else:
-            body = COLOR_AGENT
-        pygame.draw.circle(surface, body, (cx, cy), radius)
+        radius = self.config.cell_size * 0.33
+        self._blit_sprite(surface, "agent", (cx, cy))
         if env.has_key:
             pygame.draw.circle(
                 surface, COLOR_AGENT_RING, (cx, cy), radius * 1.22, width=max(2, int(radius * 0.22))
             )
-        else:
-            pygame.draw.circle(surface, (18, 62, 122), (cx, cy), radius, width=2)
         if env.died:
             offset = radius * 0.45
             for sign in (1, -1):
