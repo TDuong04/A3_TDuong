@@ -366,6 +366,16 @@ class ArenaRenderer:
         self.agent_sprite = self._load_sprite(assets / "agent.png", 45)
         self.spawner_sprite = self._load_sprite(assets / "spawner.png", 64)
 
+        # Meme easter egg: shared with the gridworld renderer, so it lives one level up in
+        # assets/memes rather than assets/arena.
+        memes = Path(__file__).resolve().parents[1] / "assets" / "memes"
+        self.meme_sprites = {
+            name: self._load_sprite(next(memes.glob(f"{name}.*")), 130)
+            for name in ("lose_kitten", "lose_crying", "win_dancing")
+        }
+        self._end_meme_kind: str | None = None
+        self._end_meme_start: float = 0.0
+
     @staticmethod
     def _load_sprite(path: Path, size: int) -> pygame.Surface:
         """Trim transparent margins and fit pixel art without stretching its proportions."""
@@ -512,8 +522,10 @@ class ArenaRenderer:
             self._draw_phase_banner(surface)
         if not env.player.alive:
             self._draw_game_over_banner(surface)
+            self._draw_meme_overlay(surface, "lose")
         elif env.steps >= env.max_episode_steps:
             self._draw_victory_banner(surface)
+            self._draw_meme_overlay(surface, "win")
 
         if not self.headless:
             pygame.display.flip()
@@ -1182,6 +1194,57 @@ class ArenaRenderer:
         pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
         pygame.draw.rect(surface, COLOR_VICTORY, backdrop, width=2, border_radius=8)
         surface.blit(text, rect)
+
+    def _draw_meme_overlay(self, surface: pygame.Surface, kind: str) -> None:
+        """A bouncing cat meme and a jokey plea for marks, drawn under the game-over/victory
+        banner. Purely cosmetic — never reads or writes simulation state, only `self._elapsed`.
+
+        `kind` restarts the fly-in/bounce clock the first frame it changes, so a fresh episode
+        ending always replays the entrance rather than picking up mid-animation.
+        """
+        if kind != self._end_meme_kind:
+            self._end_meme_kind = kind
+            self._end_meme_start = self._elapsed
+        t = self._elapsed - self._end_meme_start
+
+        cx = ARENA_WIDTH // 2
+        banner_bottom = self.HUD_HEIGHT + ARENA_HEIGHT // 2 + 40
+        if kind == "lose":
+            names = ("lose_kitten", "lose_crying")
+            caption = "Even though we lost, please still give us a good grade, Dr. Ginel Dorleon!"
+            color = COLOR_DANGER
+        else:
+            names = ("win_dancing",)
+            caption = "Yayyy we won! Please give us a good grade!"
+            color = COLOR_VICTORY
+
+        bounce = abs(math.sin(t * 4.0)) * 16
+        spacing = 150
+        start_x = cx - spacing * (len(names) - 1) / 2
+        sprite_y = banner_bottom + 90 - bounce
+        for index, name in enumerate(names):
+            fly_t = min(1.0, max(0.0, t - index * 0.15) / 0.6)
+            eased = 1 - (1 - fly_t) ** 3
+            side = -1 if index % 2 == 0 else 1
+            from_x = cx + side * (ARENA_WIDTH / 2 + 150)
+            target_x = start_x + index * spacing
+            x = from_x + (target_x - from_x) * eased
+            angle = math.sin(t * 2.2 + index) * 10
+            sprite = pygame.transform.rotate(self.meme_sprites[name], angle)
+            surface.blit(sprite, sprite.get_rect(center=(round(x), round(sprite_y))))
+
+        text = self.font_small.render(caption, True, color)
+        text_rect = text.get_rect(center=(cx, sprite_y + 90))
+        backdrop = text_rect.inflate(24, 14)
+        pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
+        pygame.draw.rect(surface, color, backdrop, width=2, border_radius=8)
+        surface.blit(text, text_rect)
+
+        # Blinking retry hint: real only in `--human` play (`eval/play_arena.py` freezes here
+        # until R is pressed), but harmless to show during an unattended agent demo too.
+        if int(t * 2.0) % 2 == 0:
+            hint = self.font_small.render("Press R to retry", True, COLOR_TEXT)
+            surface.blit(hint, hint.get_rect(center=(cx, text_rect.bottom + 22)))
 
 
 def _nearest_to(player: Any, candidates: Any) -> Any | None:

@@ -50,6 +50,7 @@ only literals here are shape geometry and palette.
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -247,6 +248,22 @@ def _heat_color(t: float) -> tuple[int, int, int]:
     return (channels[0], channels[1], channels[2])
 
 
+def _wrap_text(font: pygame.font.Font, text: str, max_width: int) -> list[str]:
+    """Greedy word-wrap so the meme caption fits a narrow grid instead of running off screen."""
+    words = text.split(" ")
+    lines: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        if font.size(candidate)[0] <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    return lines
+
+
 class GridRenderer:
     """Draws a `GridWorld` onto a surface. Owns no gameplay state beyond animation timing."""
 
@@ -306,6 +323,22 @@ class GridRenderer:
                 size = (max(1, round(sprite.get_width() * scale)),
                         max(1, round(sprite.get_height() * scale)))
             self.sprites[name] = pygame.transform.scale(sprite, size)
+
+        # Meme easter egg: shared with the arena renderer, so it lives one level up in
+        # assets/memes rather than assets/gridworld.
+        memes = Path(__file__).resolve().parents[1] / "assets" / "memes"
+        meme_extent = cell * 3.0
+        self.meme_sprites: dict[str, pygame.Surface] = {}
+        for name in ("lose_kitten", "lose_crying", "win_dancing"):
+            path = next(memes.glob(f"{name}.*"))
+            sprite = pygame.image.load(str(path))
+            scale = meme_extent / max(sprite.get_size())
+            size = (max(1, round(sprite.get_width() * scale)),
+                    max(1, round(sprite.get_height() * scale)))
+            self.meme_sprites[name] = pygame.transform.scale(sprite, size)
+        self._meme_kind: str | None = None
+        self._meme_start: float = 0.0
+        self._meme_elapsed: float = 0.0
 
         self.surface: pygame.Surface | None = None
         self._clock: pygame.time.Clock | None = None
@@ -396,6 +429,7 @@ class GridRenderer:
     def advance(self, dt: float) -> None:
         """Move the animation clock forward by `dt` seconds (from `tick()` in the app loop)."""
         self._anim_elapsed = min(self._anim_duration, self._anim_elapsed + max(0.0, dt))
+        self._meme_elapsed += max(0.0, dt)
 
     def set_animation_seconds(self, seconds: float) -> None:
         """Shorten the slide when playback is fast — an animation longer than the step interval
@@ -469,6 +503,7 @@ class GridRenderer:
         self._draw_legend(surface, env, status or {})
         if self.show_debug:
             self._draw_debug(surface, env, (status or {}).get("learning_update"))
+        self._draw_meme_overlay(surface, env)
         return surface
 
     def _draw_floor(self, surface: pygame.Surface, env: GridWorld) -> None:
@@ -644,6 +679,76 @@ class GridRenderer:
         if state_text:
             label = self.font_hud.render(state_text, True, color)
             surface.blit(label, label.get_rect(midright=(surface.get_width() - 10, bar.centery)))
+
+    def _draw_meme_overlay(self, surface: pygame.Surface, env: GridWorld) -> None:
+        """A bouncing cat meme and a jokey plea for marks, shown once the episode ends.
+
+        Purely cosmetic: it reads `env.died`/`env.terminated` but never writes anything the
+        algorithms depend on, and it is drawn alongside the existing HUD "DEAD"/"SOLVED" label
+        rather than replacing it.
+        """
+        if env.died:
+            kind = "lose"
+        elif env.terminated:
+            kind = "win"
+        else:
+            self._meme_kind = None
+            return
+
+        if kind != self._meme_kind:
+            self._meme_kind = kind
+            self._meme_start = self._meme_elapsed
+        t = self._meme_elapsed - self._meme_start
+
+        cell = self.config.cell_size
+        field_w = env.n_cols * cell
+        field_h = env.n_rows * cell
+        cx = field_w / 2
+        cy = self.hud_height + field_h / 2
+
+        if kind == "lose":
+            names = ("lose_kitten", "lose_crying")
+            caption = "Even though we lost, please still give us a good grade, Dr. Ginel Dorleon!"
+            color = (226, 76, 96)
+        else:
+            names = ("win_dancing",)
+            caption = "Yayyy we won! Please give us a good grade!"
+            color = COLOR_APPLE
+
+        bounce = abs(math.sin(t * 4.0)) * (cell * 0.28)
+        spacing = cell * 2.4
+        start_x = cx - spacing * (len(names) - 1) / 2
+        for index, name in enumerate(names):
+            fly_t = min(1.0, max(0.0, t - index * 0.15) / 0.6)
+            eased = 1 - (1 - fly_t) ** 3
+            side = -1 if index % 2 == 0 else 1
+            from_x = cx + side * (field_w / 2 + cell * 2)
+            target_x = start_x + index * spacing
+            x = from_x + (target_x - from_x) * eased
+            y = cy - bounce
+            angle = math.sin(t * 2.2 + index) * 10
+            sprite = pygame.transform.rotate(self.meme_sprites[name], angle)
+            surface.blit(sprite, sprite.get_rect(center=(round(x), round(y))))
+
+        lines = _wrap_text(self.font_small, caption, max(120, field_w - 20))
+        rendered = [self.font_small.render(line, True, color) for line in lines]
+        line_height = self.font_small.get_height()
+        block_top = cy + cell * 1.5
+
+        backdrop = pygame.Rect(0, 0, max(t.get_width() for t in rendered) + 20,
+                                len(rendered) * (line_height + 2) + 8)
+        backdrop.center = (cx, block_top + (len(rendered) - 1) * (line_height + 2) / 2)
+        pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
+        pygame.draw.rect(surface, color, backdrop, width=2, border_radius=8)
+        for row, text in enumerate(rendered):
+            surface.blit(text, text.get_rect(center=(cx, block_top + row * (line_height + 2))))
+
+        # Blinking retry hint: R already resets the episode (`PlaybackApp.handle_event`), so this
+        # is just making that control visible instead of adding a new one.
+        if int(t * 2.0) % 2 == 0:
+            hint = self.font_small.render("Press R to retry", True, COLOR_TEXT)
+            hint_y = block_top + len(rendered) * (line_height + 2) + 14
+            surface.blit(hint, hint.get_rect(center=(cx, hint_y)))
 
     def _draw_legend(
         self, surface: pygame.Surface, env: GridWorld, status: Mapping[str, Any]
