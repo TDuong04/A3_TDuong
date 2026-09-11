@@ -494,10 +494,17 @@ class ArenaRenderer:
                 image = field_surface.copy()
                 field_surface.fill(COLOR_FIELD)
                 field_surface.blit(image, offset)
-        # Everything drawn into `field` above -- background, stars, sprites, effects, shake -- is
-        # finished now. This is the one place the "game" half of the screen goes through the
-        # retro pipeline; the compass, panels and HUD drawn from here on stay crisp, because a
-        # marker has to read exact values off them.
+        # The end-of-episode banners join the retro pipeline here, not after it: unlike the HUD's
+        # numbers, nobody has to read an exact value off "GAME OVER", so it gets the same chunky
+        # arcade treatment as the ship and the starfield rather than sitting crisp on top of them.
+        if not env.player.alive:
+            self._draw_game_over_banner(surface)
+        elif env.steps >= env.max_episode_steps:
+            self._draw_victory_banner(surface)
+        # Everything drawn into `field` above -- background, stars, sprites, effects, shake,
+        # end banners -- is finished now. This is the one place the "game" half of the screen goes
+        # through the retro pipeline; the compass, panels and HUD drawn from here on stay crisp,
+        # because a marker has to read exact values off them.
         self._pixelate_field(surface, field)
         self._draw_cabinet_bezel(surface, field)
         if self.show_observation_overlay:
@@ -508,12 +515,11 @@ class ArenaRenderer:
             self._draw_debug_panel(surface, env, policy_view, debug_snapshot, policy_status)
             self._draw_physics(surface, env)
         self._draw_hud(surface, env, policy_view)
-        if self._banner_remaining > 0.0:
+        # The end banner already won this frame above; skip the phase banner so a phase advance
+        # landing on the same step the episode ends can't render on top of it -- the episode
+        # ending still outranks the episode continuing, just via a condition now, not draw order.
+        if self._banner_remaining > 0.0 and env.player.alive and env.steps < env.max_episode_steps:
             self._draw_phase_banner(surface)
-        if not env.player.alive:
-            self._draw_game_over_banner(surface)
-        elif env.steps >= env.max_episode_steps:
-            self._draw_victory_banner(surface)
 
         if not self.headless:
             pygame.display.flip()
@@ -560,12 +566,18 @@ class ArenaRenderer:
         field = pygame.Rect(0, self.HUD_HEIGHT, ARENA_WIDTH, ARENA_HEIGHT)
         pygame.draw.rect(surface, COLOR_FIELD, field)
         self._draw_starfield(surface)
-        self._pixelate_field(surface, field)
-        self._draw_cabinet_bezel(surface, field)
 
+        # Drawn before the pixelate pass, not after: the title is part of the "machine" this
+        # screen is showing off, not a data readout, so it earns the same chunky arcade treatment
+        # as the starfield behind it rather than sitting crisp on top. The smaller lines below stay
+        # off this pass, the same reason the HUD does -- at this font size the downscale round trip
+        # blurs letterforms instead of chunking them, so it costs legibility without adding style.
         mid_x, mid_y = ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2
         title = self.font_banner.render("A3 ARENA", True, COLOR_ACCENT)
         surface.blit(title, title.get_rect(center=(mid_x, mid_y - 70)))
+
+        self._pixelate_field(surface, field)
+        self._draw_cabinet_bezel(surface, field)
 
         mode = "SHIELD + ELITE" if mechanics else "BASELINE"
         subtitle = self.font_hud.render(f"STYLE: {control_style.upper()}   MODE: {mode}", True, COLOR_TEXT)
@@ -1153,8 +1165,9 @@ class ArenaRenderer:
 
         Needs no countdown of its own, unlike the phase banner: `player.alive` stays False for
         the rest of the episode, so the condition that shows this is already latched by the sim.
-        Drawn after the phase banner so it wins the rare frame where a kill and a phase advance
-        land together — the episode ending outranks the episode continuing.
+        `draw()` skips the phase banner whenever this one is showing, so a kill and a phase
+        advance landing on the same frame still resolve with the episode ending outranking the
+        episode continuing.
         """
         text = self.font_banner.render("GAME OVER", True, COLOR_DANGER)
         rect = text.get_rect(center=(ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2))
