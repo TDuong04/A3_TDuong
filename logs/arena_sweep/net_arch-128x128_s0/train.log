@@ -2,8 +2,8 @@
 [train_arena] {
   "control_style": "direct",
   "policy": "MlpPolicy",
-  "started": "2026-09-05T23:43:38",
-  "git_commit": "70b1740",
+  "started": "2026-09-12T00:30:06",
+  "git_commit": "fc2cf4b",
   "algorithm": "PPO",
   "total_timesteps": 100000,
   "n_envs": 8,
@@ -18,195 +18,198 @@
   ],
   "seed": 0,
   "run_name": "net_arch-128x128_s0",
+  "mechanics": false,
+  "observation_dim": 20,
+  "mechanics_config": null,
   "model_path": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models/ppo_direct.zip",
   "ignored_hyperparameters": []
 }
 Using cpu device
-Logging to /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/net_arch-128x128_s0/tb_1
+Logging to /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/net_arch-128x128_s0/tb_2
 ------------------------------------
 | behaviour/            |          |
 |    damage_taken       | 5        |
-|    enemies_killed     | 2.19     |
-|    episode_length     | 257      |
+|    enemies_killed     | 1.81     |
+|    episode_length     | 248      |
 |    phase_reached      | 1        |
-|    spawners_destroyed | 0.105    |
+|    spawners_destroyed | 0.0484   |
 |    survival_rate      | 0        |
 | rollout/              |          |
-|    ep_len_mean        | 257      |
-|    ep_rew_mean        | -12.3    |
+|    ep_len_mean        | 248      |
+|    ep_rew_mean        | -12.9    |
 | time/                 |          |
-|    fps                | 22298    |
+|    fps                | 22661    |
 |    iterations         | 1        |
 |    time_elapsed       | 0        |
 |    total_timesteps    | 16384    |
 ------------------------------------
-------------------------------------------
-| behaviour/              |              |
-|    damage_taken         | 5            |
-|    enemies_killed       | 2.3          |
-|    episode_length       | 263          |
-|    phase_reached        | 1            |
-|    spawners_destroyed   | 0.09         |
-|    survival_rate        | 0            |
-| rollout/                |              |
-|    ep_len_mean          | 263          |
-|    ep_rew_mean          | -12.4        |
-| time/                   |              |
-|    fps                  | 15896        |
-|    iterations           | 2            |
-|    time_elapsed         | 2            |
-|    total_timesteps      | 32768        |
-| train/                  |              |
-|    approx_kl            | 0.0077454206 |
-|    clip_fraction        | 0.052        |
-|    clip_range           | 0.2          |
-|    entropy_loss         | -1.78        |
-|    explained_variance   | 0.00522      |
-|    learning_rate        | 0.0003       |
-|    loss                 | 0.512        |
-|    n_updates            | 10           |
-|    policy_gradient_loss | -0.00463     |
-|    value_loss           | 1.94         |
-------------------------------------------
 -----------------------------------------
 | behaviour/              |             |
 |    damage_taken         | 5           |
-|    enemies_killed       | 2.31        |
-|    episode_length       | 275         |
+|    enemies_killed       | 1.94        |
+|    episode_length       | 252         |
+|    phase_reached        | 1           |
+|    spawners_destroyed   | 0.04        |
+|    survival_rate        | 0           |
+| rollout/                |             |
+|    ep_len_mean          | 252         |
+|    ep_rew_mean          | -12.9       |
+| time/                   |             |
+|    fps                  | 16047       |
+|    iterations           | 2           |
+|    time_elapsed         | 2           |
+|    total_timesteps      | 32768       |
+| train/                  |             |
+|    approx_kl            | 0.009312758 |
+|    clip_fraction        | 0.0388      |
+|    clip_range           | 0.2         |
+|    entropy_loss         | -1.79       |
+|    explained_variance   | 0.0238      |
+|    learning_rate        | 0.0003      |
+|    loss                 | 0.884       |
+|    n_updates            | 10          |
+|    policy_gradient_loss | -0.00354    |
+|    value_loss           | 2.03        |
+-----------------------------------------
+-----------------------------------------
+| behaviour/              |             |
+|    damage_taken         | 5           |
+|    enemies_killed       | 2.42        |
+|    episode_length       | 272         |
 |    phase_reached        | 1           |
 |    spawners_destroyed   | 0.03        |
 |    survival_rate        | 0           |
 | rollout/                |             |
-|    ep_len_mean          | 275         |
-|    ep_rew_mean          | -12.8       |
+|    ep_len_mean          | 272         |
+|    ep_rew_mean          | -12.7       |
 | time/                   |             |
-|    fps                  | 14577       |
+|    fps                  | 14503       |
 |    iterations           | 3           |
 |    time_elapsed         | 3           |
 |    total_timesteps      | 49152       |
 | train/                  |             |
-|    approx_kl            | 0.012155525 |
-|    clip_fraction        | 0.101       |
+|    approx_kl            | 0.010549894 |
+|    clip_fraction        | 0.106       |
 |    clip_range           | 0.2         |
 |    entropy_loss         | -1.77       |
-|    explained_variance   | 0.68        |
+|    explained_variance   | 0.702       |
 |    learning_rate        | 0.0003      |
-|    loss                 | 0.481       |
+|    loss                 | 0.5         |
 |    n_updates            | 20          |
-|    policy_gradient_loss | -0.00673    |
-|    value_loss           | 1.09        |
+|    policy_gradient_loss | -0.00507    |
+|    value_loss           | 1.18        |
 -----------------------------------------
 -----------------------------------------
 | behaviour/              |             |
 |    damage_taken         | 5           |
-|    enemies_killed       | 2.7         |
-|    episode_length       | 299         |
+|    enemies_killed       | 2.56        |
+|    episode_length       | 285         |
 |    phase_reached        | 1           |
-|    spawners_destroyed   | 0.05        |
+|    spawners_destroyed   | 0.04        |
 |    survival_rate        | 0           |
 | rollout/                |             |
-|    ep_len_mean          | 299         |
-|    ep_rew_mean          | -12.5       |
+|    ep_len_mean          | 285         |
+|    ep_rew_mean          | -12.6       |
 | time/                   |             |
-|    fps                  | 13915       |
+|    fps                  | 13848       |
 |    iterations           | 4           |
 |    time_elapsed         | 4           |
 |    total_timesteps      | 65536       |
 | train/                  |             |
-|    approx_kl            | 0.010114655 |
-|    clip_fraction        | 0.0568      |
+|    approx_kl            | 0.007930894 |
+|    clip_fraction        | 0.0745      |
 |    clip_range           | 0.2         |
 |    entropy_loss         | -1.75       |
-|    explained_variance   | 0.833       |
+|    explained_variance   | 0.822       |
 |    learning_rate        | 0.0003      |
-|    loss                 | 0.33        |
+|    loss                 | 0.397       |
 |    n_updates            | 30          |
-|    policy_gradient_loss | -0.00571    |
-|    value_loss           | 0.794       |
+|    policy_gradient_loss | -0.00526    |
+|    value_loss           | 0.905       |
 -----------------------------------------
+------------------------------------------
+| behaviour/              |              |
+|    damage_taken         | 5            |
+|    enemies_killed       | 3.61         |
+|    episode_length       | 333          |
+|    phase_reached        | 1            |
+|    spawners_destroyed   | 0.08         |
+|    survival_rate        | 0            |
+| rollout/                |              |
+|    ep_len_mean          | 333          |
+|    ep_rew_mean          | -11.8        |
+| time/                   |              |
+|    fps                  | 13528        |
+|    iterations           | 5            |
+|    time_elapsed         | 6            |
+|    total_timesteps      | 81920        |
+| train/                  |              |
+|    approx_kl            | 0.0075408006 |
+|    clip_fraction        | 0.0661       |
+|    clip_range           | 0.2          |
+|    entropy_loss         | -1.73        |
+|    explained_variance   | 0.847        |
+|    learning_rate        | 0.0003       |
+|    loss                 | 0.371        |
+|    n_updates            | 40           |
+|    policy_gradient_loss | -0.00775     |
+|    value_loss           | 0.822        |
+------------------------------------------
 -----------------------------------------
 | behaviour/              |             |
 |    damage_taken         | 5           |
-|    enemies_killed       | 3.95        |
-|    episode_length       | 344         |
-|    phase_reached        | 1           |
-|    spawners_destroyed   | 0.07        |
+|    enemies_killed       | 5.65        |
+|    episode_length       | 417         |
+|    phase_reached        | 1.02        |
+|    spawners_destroyed   | 0.18        |
 |    survival_rate        | 0           |
 | rollout/                |             |
-|    ep_len_mean          | 344         |
-|    ep_rew_mean          | -11.6       |
+|    ep_len_mean          | 417         |
+|    ep_rew_mean          | -9.92       |
 | time/                   |             |
-|    fps                  | 13585       |
-|    iterations           | 5           |
-|    time_elapsed         | 6           |
-|    total_timesteps      | 81920       |
-| train/                  |             |
-|    approx_kl            | 0.007839799 |
-|    clip_fraction        | 0.0804      |
-|    clip_range           | 0.2         |
-|    entropy_loss         | -1.72       |
-|    explained_variance   | 0.865       |
-|    learning_rate        | 0.0003      |
-|    loss                 | 0.287       |
-|    n_updates            | 40          |
-|    policy_gradient_loss | -0.00609    |
-|    value_loss           | 0.7         |
------------------------------------------
------------------------------------------
-| behaviour/              |             |
-|    damage_taken         | 5           |
-|    enemies_killed       | 5           |
-|    episode_length       | 396         |
-|    phase_reached        | 1.01        |
-|    spawners_destroyed   | 0.14        |
-|    survival_rate        | 0           |
-| rollout/                |             |
-|    ep_len_mean          | 396         |
-|    ep_rew_mean          | -10.7       |
-| time/                   |             |
-|    fps                  | 13381       |
+|    fps                  | 13266       |
 |    iterations           | 6           |
 |    time_elapsed         | 7           |
 |    total_timesteps      | 98304       |
 | train/                  |             |
-|    approx_kl            | 0.009099839 |
-|    clip_fraction        | 0.0862      |
+|    approx_kl            | 0.008245036 |
+|    clip_fraction        | 0.0843      |
 |    clip_range           | 0.2         |
-|    entropy_loss         | -1.67       |
-|    explained_variance   | 0.81        |
+|    entropy_loss         | -1.68       |
+|    explained_variance   | 0.752       |
 |    learning_rate        | 0.0003      |
-|    loss                 | 0.464       |
+|    loss                 | 0.678       |
 |    n_updates            | 50          |
-|    policy_gradient_loss | -0.0077     |
-|    value_loss           | 0.866       |
+|    policy_gradient_loss | -0.00781    |
+|    value_loss           | 1.18        |
 -----------------------------------------
 -----------------------------------------
 | behaviour/              |             |
 |    damage_taken         | 5           |
-|    enemies_killed       | 6.77        |
-|    episode_length       | 476         |
-|    phase_reached        | 1.02        |
-|    spawners_destroyed   | 0.25        |
+|    enemies_killed       | 7.39        |
+|    episode_length       | 498         |
+|    phase_reached        | 1.03        |
+|    spawners_destroyed   | 0.3         |
 |    survival_rate        | 0           |
 | rollout/                |             |
-|    ep_len_mean          | 476         |
-|    ep_rew_mean          | -9.04       |
+|    ep_len_mean          | 498         |
+|    ep_rew_mean          | -8.29       |
 | time/                   |             |
-|    fps                  | 13227       |
+|    fps                  | 13040       |
 |    iterations           | 7           |
 |    time_elapsed         | 8           |
 |    total_timesteps      | 114688      |
 | train/                  |             |
-|    approx_kl            | 0.009606875 |
-|    clip_fraction        | 0.0871      |
+|    approx_kl            | 0.008176138 |
+|    clip_fraction        | 0.0757      |
 |    clip_range           | 0.2         |
-|    entropy_loss         | -1.6        |
-|    explained_variance   | 0.725       |
+|    entropy_loss         | -1.62       |
+|    explained_variance   | 0.662       |
 |    learning_rate        | 0.0003      |
-|    loss                 | 0.431       |
+|    loss                 | 0.438       |
 |    n_updates            | 60          |
-|    policy_gradient_loss | -0.00729    |
-|    value_loss           | 0.902       |
+|    policy_gradient_loss | -0.00545    |
+|    value_loss           | 1.21        |
 -----------------------------------------
-[train_arena] saved /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models/ppo_direct.zip in 9.2s
+[train_arena] saved /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models/ppo_direct.zip in 9.4s
 [train_arena] tensorboard --logdir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep
