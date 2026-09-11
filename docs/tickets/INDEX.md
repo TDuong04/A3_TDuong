@@ -9,7 +9,6 @@ raise, update or close a ticket, or edit the ticket file and re-run the script.
 
 | ID | Pri | Type | Title | Rubric | Pts | Area | Owner | Issue |
 |----|-----|------|-------|--------|-----|------|-------|-------|
-| [A3-011](A3-011-build-the-training-pipeline-with-tensorboard.md) | P0 | feature | Build the training pipeline with TensorBoard behavioural logging _(blocked by A3-010)_ | J | 3 | training | unassigned | [#11](https://github.com/TDuong04/A3_TDuong/issues/11) |
 | [A3-014](A3-014-write-the-report.md) | P0 | task | Write the report _(blocked by A3-007, A3-012)_ | R | 2.5 | report | unassigned | [#14](https://github.com/TDuong04/A3_TDuong/issues/14) |
 | [A3-015](A3-015-record-and-edit-the-video-demonstration.md) | P0 | task | Record and edit the video demonstration _(blocked by A3-012, A3-002)_ | V | 5 | video | unassigned | [#15](https://github.com/TDuong04/A3_TDuong/issues/15) |
 | [A3-017](A3-017-decide-ownership-and-fill-in-the.md) | P1 | chore | Decide ownership and fill in the team table | R | 2.5 | infra | unassigned | [#17](https://github.com/TDuong04/A3_TDuong/issues/17) |
@@ -41,6 +40,7 @@ _none_
 | [A3-008](A3-008-build-arena-entities-and-physics.md) | P0 | feature | Build arena entities and physics | G | 4.5 | arena | unassigned | [#8](https://github.com/TDuong04/A3_TDuong/issues/8) |
 | [A3-009](A3-009-build-the-arena-renderer-hud-and.md) | P0 | feature | Build the arena renderer, HUD and observation overlay | G | 4.5 | arena | unassigned | [#9](https://github.com/TDuong04/A3_TDuong/issues/9) |
 | [A3-010](A3-010-wrap-the-arena-in-the-gym.md) | P0 | feature | Wrap the arena in the Gym-style API with the observation vector | H | 2.5 | arena | unassigned | [#10](https://github.com/TDuong04/A3_TDuong/issues/10) |
+| [A3-011](A3-011-build-the-training-pipeline-with-tensorboard.md) | P0 | feature | Build the training pipeline with TensorBoard behavioural logging | J | 3 | training | unassigned | [#11](https://github.com/TDuong04/A3_TDuong/issues/11) |
 | [A3-012](A3-012-train-both-control-agents-and-write.md) | P0 | feature | Train both control agents and write the evaluation scripts | I | 4 | eval | unassigned | [#12](https://github.com/TDuong04/A3_TDuong/issues/12) |
 | [A3-013](A3-013-run-the-hyperparameter-sweep-and-tabulate.md) | P0 | task | Run the hyperparameter sweep and tabulate the results | J3 | 3 | training | member-1 | [#13](https://github.com/TDuong04/A3_TDuong/issues/13) |
 | [A3-020](A3-020-implement-the-gridworld-playback-script.md) | P0 | feature | Implement the gridworld playback script | V | 5 | eval | unassigned | [#20](https://github.com/TDuong04/A3_TDuong/issues/20) |

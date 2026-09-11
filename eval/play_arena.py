@@ -4,11 +4,17 @@
     python -m eval.play_arena --style direct --episodes 5
     python -m eval.play_arena --style direct --human
     python -m eval.play_arena --style direct --random    # before anything has been trained
-    python -m eval.play_arena --style both --episodes 5 --no-window   # the comparison table
+    python -m eval.play_arena --style both --no-window   # the comparison table (30 episodes/style)
 
 Rubric row I4 asks for an evaluation script that can visually run each trained agent, so this works
 for both styles from `models/`. Actions are taken with `deterministic=True`: a stochastic policy on
 camera looks like a broken one, and the rubric asks for the deterministic policy anyway.
+
+The comparison table's default episode count is 30, not a quick-look number: `--episodes` used to
+default to 3, which is what the command above actually ran as long as nobody remembered to type an
+override that appeared only in this docstring and disagreed with it (5) -- see A3-032. The default
+now matches the sample size the committed evidence in `results/arena_eval/` is measured at, so
+running the command exactly as documented cannot silently under-sample it again.
 
 This is what the video records for Part II. It has to show enemies spawning and moving, projectiles
 and collisions, and at least one phase progression -- so the summary below reports how often a phase
@@ -298,6 +304,25 @@ def _reportable(path: Path) -> str:
         return str(path)
 
 
+def _load_existing_entry(directory: Path, style: str, random_run: bool) -> dict[str, Any] | None:
+    """The most recently written per-style stats for `style` already on disk, or `None`.
+
+    `write_results` used to rebuild `comparison.md` from nothing but the entries it was just
+    given, so re-running one style alone (say, spot-checking `rotation` after a retrain) silently
+    deleted the other style's row -- even though its JSON was sitting untouched right next to it
+    (A3-032). Reading that JSON back in is what lets a single-style rerun update its own row
+    without erasing its neighbour's.
+    """
+    prefix = "eval_random" if random_run else "eval"
+    candidates = sorted(directory.glob(f"{prefix}_{style}_seed*.json"))
+    if not candidates:
+        return None
+    try:
+        return json.loads(candidates[-1].read_text())
+    except (OSError, ValueError):
+        return None
+
+
 def write_results(
     stats: list[dict[str, Any]], results_dir: Path | None = None
 ) -> dict[str, Path]:
@@ -329,7 +354,24 @@ def write_results(
     # a heading that claims a trained policy produced them.
     random_run = any(entry.get("policy") == RandomPolicy.name for entry in stats)
     table = directory / ("comparison_random.md" if random_run else "comparison.md")
-    table.write_text(format_comparison_markdown(stats, generated))
+
+    # Fill in any style this call did not itself measure from what is already on disk, so the
+    # table always reflects every style that has ever been evaluated here, not just the last
+    # command's --style argument.
+    written_styles = {entry["style"] for entry in stats}
+    table_entries = list(stats)
+    carried_over: set[str] = set()
+    for style in STYLES:
+        if style in written_styles:
+            continue
+        existing = _load_existing_entry(directory, style, random_run)
+        if existing is not None:
+            table_entries.append(existing)
+            carried_over.add(style)
+    table_entries.sort(key=lambda entry: STYLES.index(entry["style"])
+                       if entry["style"] in STYLES else len(STYLES))
+
+    table.write_text(format_comparison_markdown(table_entries, generated, carried_over=carried_over))
     written["comparison"] = table
     return written
 
@@ -340,13 +382,28 @@ def _stem(entry: dict[str, Any]) -> str:
     return f"{prefix}_{entry['style']}_seed{entry['seed']}"
 
 
-def format_comparison_markdown(stats: list[dict[str, Any]], generated: str) -> str:
+def format_comparison_markdown(
+    stats: list[dict[str, Any]], generated: str, *, carried_over: set[str] | None = None
+) -> str:
     """The control-scheme comparison as a markdown table, in the shape report row R6 wants.
 
     Ranked by nothing: with two control styles the interesting thing is the pair, not a winner, and
     sorting a two-row table implies a verdict the seeds may not support.
+
+    `carried_over` names styles in `stats` this call did not itself measure -- rows `write_results`
+    filled in from an earlier run's JSON (A3-032) rather than silently dropping. The header states
+    the episode count and command for the rows this call *did* measure; a carried-over row keeps
+    whatever count it was actually measured with, visible in its own `Episodes` column, and is
+    named explicitly rather than folded into a command line that did not produce it.
     """
+    carried_over = carried_over or set()
+    fresh = [entry for entry in stats if entry["style"] not in carried_over] or stats
     random_run = any(entry.get("policy") == RandomPolicy.name for entry in stats)
+    episode_counts = sorted({entry["episodes"] for entry in fresh})
+    # Named explicitly rather than left to the reader to notice in the table: the failure this
+    # guards against (A3-032) is exactly a sample size nobody would think to check for.
+    episodes_flag = f" --episodes {episode_counts[0]}" if len(episode_counts) == 1 else ""
+    styles_flag = "both" if len(fresh) != 1 else fresh[0]["style"]
     if random_run:
         # Said before the table rather than after it: a heading is what gets screenshotted.
         policy_line = (
@@ -354,20 +411,30 @@ def format_comparison_markdown(stats: list[dict[str, Any]], generated: str) -> s
             "the action space. These are the numbers chance alone produces on the same seeded "
             "arenas, which is what makes the trained table above them mean anything.\n\n"
         )
-        command = "--style both --no-window --random"
+        command = f"--style {styles_flag} --no-window --random{episodes_flag}"
     else:
         policy_line = (
             f"Deterministic policy (`deterministic={DETERMINISTIC}`), both styles evaluated on the "
             f"same seed sequence so they meet the same arenas.\n\n"
         )
-        command = "--style both --no-window"
+        command = f"--style {styles_flag} --no-window{episodes_flag}"
     if any(entry.get("mechanics") for entry in stats):
         command += " --mechanics"
         policy_line += "Rules: shield pickups and elite chargers.\n\n"
+    carried_note = ""
+    if carried_over:
+        names = " and ".join(f"`{style}`" for style in sorted(carried_over))
+        row_word = "row" if len(carried_over) == 1 else "rows"
+        carried_note = (
+            f"The {names} {row_word} below {'is' if len(carried_over) == 1 else 'are'} carried "
+            f"over from an earlier run, not remeasured by the command above -- see its own "
+            f"`Episodes` column for the sample size it was actually measured at.\n\n"
+        )
     header = (
         f"# Arena control-scheme comparison\n\n"
         f"Generated {generated} by `python -m eval.play_arena {command}`.\n\n"
         f"{policy_line}"
+        f"{carried_note}"
     )
     columns = (
         "| Style | Policy | Episodes | Return | Phase reached | Phases cleared | Spawners "
@@ -580,7 +647,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Visually run a trained arena agent, or play the arena yourself."
     )
     parser.add_argument("--style", choices=(*STYLES, "both"), default="direct")
-    parser.add_argument("--episodes", type=int, default=3)
+    #: Matches the sample size `results/arena_eval/comparison.md` is measured at (A3-032): the
+    #: command this script's own docstring and README.md document for regenerating that evidence
+    #: passes no --episodes override, so the default has to already be the number that belongs there.
+    parser.add_argument("--episodes", type=int, default=30)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--mechanics", action="store_true",
                         help="enable shields and elites; use models/mechanics")

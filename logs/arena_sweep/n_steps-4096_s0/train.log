@@ -2,8 +2,8 @@
 [train_arena] {
   "control_style": "direct",
   "policy": "MlpPolicy",
-  "started": "2026-09-05T23:42:59",
-  "git_commit": "70b1740",
+  "started": "2026-09-12T00:29:25",
+  "git_commit": "fc2cf4b",
   "algorithm": "PPO",
   "total_timesteps": 100000,
   "n_envs": 8,
@@ -18,24 +18,27 @@
   ],
   "seed": 0,
   "run_name": "n_steps-4096_s0",
+  "mechanics": false,
+  "observation_dim": 20,
+  "mechanics_config": null,
   "model_path": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models/ppo_direct.zip",
   "ignored_hyperparameters": []
 }
 Using cpu device
-Logging to /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/n_steps-4096_s0/tb_1
+Logging to /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/n_steps-4096_s0/tb_2
 ------------------------------------
 | behaviour/            |          |
 |    damage_taken       | 5        |
-|    enemies_killed     | 1.92     |
-|    episode_length     | 247      |
+|    enemies_killed     | 1.55     |
+|    episode_length     | 239      |
 |    phase_reached      | 1        |
-|    spawners_destroyed | 0.04     |
+|    spawners_destroyed | 0.03     |
 |    survival_rate      | 0        |
 | rollout/              |          |
-|    ep_len_mean        | 247      |
-|    ep_rew_mean        | -12.9    |
+|    ep_len_mean        | 239      |
+|    ep_rew_mean        | -13.2    |
 | time/                 |          |
-|    fps                | 23041    |
+|    fps                | 22149    |
 |    iterations         | 1        |
 |    time_elapsed       | 1        |
 |    total_timesteps    | 32768    |
@@ -43,86 +46,86 @@ Logging to /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assi
 -----------------------------------------
 | behaviour/              |             |
 |    damage_taken         | 5           |
-|    enemies_killed       | 1.9         |
-|    episode_length       | 242         |
+|    enemies_killed       | 2.69        |
+|    episode_length       | 289         |
 |    phase_reached        | 1           |
-|    spawners_destroyed   | 0.06        |
+|    spawners_destroyed   | 0.03        |
 |    survival_rate        | 0           |
 | rollout/                |             |
-|    ep_len_mean          | 242         |
-|    ep_rew_mean          | -12.7       |
+|    ep_len_mean          | 289         |
+|    ep_rew_mean          | -12.5       |
 | time/                   |             |
-|    fps                  | 17642       |
+|    fps                  | 17121       |
 |    iterations           | 2           |
 |    time_elapsed         | 3           |
 |    total_timesteps      | 65536       |
 | train/                  |             |
-|    approx_kl            | 0.008268058 |
-|    clip_fraction        | 0.0472      |
+|    approx_kl            | 0.008086959 |
+|    clip_fraction        | 0.0498      |
 |    clip_range           | 0.2         |
 |    entropy_loss         | -1.79       |
-|    explained_variance   | -0.078      |
+|    explained_variance   | -0.0516     |
 |    learning_rate        | 0.0003      |
-|    loss                 | 0.7         |
+|    loss                 | 0.641       |
 |    n_updates            | 10          |
-|    policy_gradient_loss | -0.00313    |
-|    value_loss           | 1.97        |
+|    policy_gradient_loss | -0.00329    |
+|    value_loss           | 1.86        |
 -----------------------------------------
-------------------------------------------
-| behaviour/              |              |
-|    damage_taken         | 5            |
-|    enemies_killed       | 2.46         |
-|    episode_length       | 281          |
-|    phase_reached        | 1.02         |
-|    spawners_destroyed   | 0.09         |
-|    survival_rate        | 0            |
-| rollout/                |              |
-|    ep_len_mean          | 281          |
-|    ep_rew_mean          | -12.2        |
-| time/                   |              |
-|    fps                  | 16471        |
-|    iterations           | 3            |
-|    time_elapsed         | 5            |
-|    total_timesteps      | 98304        |
-| train/                  |              |
-|    approx_kl            | 0.0068759276 |
-|    clip_fraction        | 0.0342       |
-|    clip_range           | 0.2          |
-|    entropy_loss         | -1.78        |
-|    explained_variance   | 0.695        |
-|    learning_rate        | 0.0003       |
-|    loss                 | 0.415        |
-|    n_updates            | 20           |
-|    policy_gradient_loss | -0.00312     |
-|    value_loss           | 0.92         |
-------------------------------------------
+----------------------------------------
+| behaviour/              |            |
+|    damage_taken         | 5          |
+|    enemies_killed       | 3.45       |
+|    episode_length       | 342        |
+|    phase_reached        | 1          |
+|    spawners_destroyed   | 0.08       |
+|    survival_rate        | 0          |
+| rollout/                |            |
+|    ep_len_mean          | 342        |
+|    ep_rew_mean          | -12.1      |
+| time/                   |            |
+|    fps                  | 16016      |
+|    iterations           | 3          |
+|    time_elapsed         | 6          |
+|    total_timesteps      | 98304      |
+| train/                  |            |
+|    approx_kl            | 0.00791518 |
+|    clip_fraction        | 0.0674     |
+|    clip_range           | 0.2        |
+|    entropy_loss         | -1.77      |
+|    explained_variance   | 0.72       |
+|    learning_rate        | 0.0003     |
+|    loss                 | 0.364      |
+|    n_updates            | 20         |
+|    policy_gradient_loss | -0.00564   |
+|    value_loss           | 0.968      |
+----------------------------------------
 -----------------------------------------
 | behaviour/              |             |
 |    damage_taken         | 5           |
-|    enemies_killed       | 2.36        |
-|    episode_length       | 272         |
-|    phase_reached        | 1           |
-|    spawners_destroyed   | 0.08        |
+|    enemies_killed       | 5.09        |
+|    episode_length       | 465         |
+|    phase_reached        | 1.03        |
+|    spawners_destroyed   | 0.17        |
 |    survival_rate        | 0           |
 | rollout/                |             |
-|    ep_len_mean          | 272         |
-|    ep_rew_mean          | -12.5       |
+|    ep_len_mean          | 465         |
+|    ep_rew_mean          | -10.9       |
 | time/                   |             |
-|    fps                  | 15977       |
+|    fps                  | 15473       |
 |    iterations           | 4           |
 |    time_elapsed         | 8           |
 |    total_timesteps      | 131072      |
 | train/                  |             |
-|    approx_kl            | 0.007787009 |
-|    clip_fraction        | 0.0573      |
+|    approx_kl            | 0.008836487 |
+|    clip_fraction        | 0.082       |
 |    clip_range           | 0.2         |
-|    entropy_loss         | -1.76       |
-|    explained_variance   | 0.834       |
+|    entropy_loss         | -1.74       |
+|    explained_variance   | 0.799       |
 |    learning_rate        | 0.0003      |
-|    loss                 | 0.592       |
+|    loss                 | 0.363       |
 |    n_updates            | 30          |
-|    policy_gradient_loss | -0.00484    |
-|    value_loss           | 0.898       |
+|    policy_gradient_loss | -0.00717    |
+|    value_loss           | 0.917       |
 -----------------------------------------
-[train_arena] saved /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models/ppo_direct.zip in 9.0s
+[train_arena] saved /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models/ppo_direct.zip in 9.3s
 [train_arena] tensorboard --logdir /Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep

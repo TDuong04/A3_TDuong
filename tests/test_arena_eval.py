@@ -302,6 +302,46 @@ class TestWritingResults:
         assert "+8.90" in markdown
         assert "1.67" in markdown
 
+    def test_rerunning_one_style_keeps_the_others_row(self):
+        """A3-032: `write_results` used to rebuild the whole table from only the styles it was just
+        given, so re-running `rotation` alone silently deleted `direct` from `comparison.md` even
+        though `eval_direct_seed0.json` was untouched on disk right next to it."""
+        directory = EMPTY_RESULTS.parent / "__eval_rerun_one_style__"
+        try:
+            write_results([self._stats("direct"), self._stats("rotation")], directory)
+            written = write_results([self._stats("rotation")], directory)
+            table = written["comparison"].read_text()
+            assert "`direct`" in table
+            assert "`rotation`" in table
+        finally:
+            for path in directory.glob("*"):
+                path.unlink()
+            directory.rmdir()
+
+    def test_a_carried_over_row_is_named_not_silently_folded_in(self):
+        markdown = format_comparison_markdown(
+            [self._stats("direct"), self._stats("rotation")],
+            "2026-09-06T00:00:00",
+            carried_over={"direct"},
+        )
+        assert "`direct`" in markdown
+        assert "carried over from an earlier run" in markdown
+
+    def test_the_header_names_the_episode_count_actually_used(self):
+        """A3-032: the header used to be a fixed string that never reflected --episodes, so a run
+        that shrank the sample size could do so with nothing on the page to notice it by."""
+        stats = self._stats("direct")
+        stats["episodes"] = 30
+        markdown = format_comparison_markdown([stats], "2026-09-06T00:00:00")
+        assert "--episodes 30" in markdown
+
+    def test_the_cli_default_matches_the_committed_evidence_sample_size(self):
+        """The command README.md documents for regenerating row I's evidence passes no --episodes
+        override, so the default has to already be 30 -- the size `comparison.md` is measured at."""
+        from eval.play_arena import build_parser
+
+        assert build_parser().parse_args(["--style", "both", "--no-window"]).episodes == 30
+
 
 # --- the random policy ----------------------------------------------------------------------------
 

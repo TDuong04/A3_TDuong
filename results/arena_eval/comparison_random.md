@@ -1,6 +1,6 @@
 # Arena control-scheme comparison
 
-Generated 2026-09-09T10:38:03+00:00 by `python -m eval.play_arena --style both --no-window --random`.
+Generated 2026-09-11T17:26:46+00:00 by `python -m eval.play_arena --style both --no-window --random --episodes 30`.
 
 **Random-policy baseline, not a trained result.** Actions are drawn uniformly from the action space. These are the numbers chance alone produces on the same seeded arenas, which is what makes the trained table above them mean anything.
 
