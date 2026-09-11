@@ -1,8 +1,12 @@
 {
+  "mechanics": false,
   "style": "direct",
   "policy": "ppo",
   "episodes": 30,
   "seed": 0,
+  "pickups_collected_mean": 0.0,
+  "shield_blocks_mean": 0.0,
+  "elites_killed_mean": 0.0,
   "return_mean": 20.573666666666206,
   "return_std": 16.705306239502285,
   "phase_mean": 2.3666666666666667,
@@ -76,5 +80,5 @@
     1,
     2
   ],
-  "generated": "2026-09-09T10:38:03+00:00"
+  "generated": "2026-09-11T17:26:45+00:00"
 }

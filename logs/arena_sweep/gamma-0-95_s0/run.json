@@ -1,8 +1,8 @@
 {
   "control_style": "direct",
   "policy": "MlpPolicy",
-  "started": "2026-09-05T23:43:38",
-  "git_commit": "70b1740",
+  "started": "2026-09-12T00:30:05",
+  "git_commit": "fc2cf4b",
   "algorithm": "PPO",
   "total_timesteps": 100000,
   "n_envs": 8,
@@ -17,8 +17,11 @@
   ],
   "seed": 0,
   "run_name": "gamma-0-95_s0",
+  "mechanics": false,
+  "observation_dim": 20,
+  "mechanics_config": null,
   "model_path": "/Users/hanhdo/Documents/RMIT/Semester 11/Games and AI Techniques/assignments/A3/A3_TDuong/logs/arena_sweep/models/ppo_direct.zip",
   "ignored_hyperparameters": [],
-  "finished": "2026-09-05T23:43:38",
-  "wall_clock_seconds": 7.9
+  "finished": "2026-09-12T00:30:05",
+  "wall_clock_seconds": 8.1
 }
