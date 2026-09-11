@@ -764,11 +764,6 @@ class ArenaRenderer:
         # window so the player and the marker can both see the damage land.
         flicker = player.is_invulnerable and int(self._elapsed * 20.0) % 2 == 0
 
-        top_speed = player.config.speed
-        speed_fraction = min(1.0, player.speed / top_speed) if top_speed > 0 else 0.0
-        if speed_fraction > 0.02:
-            self._draw_engine_flame(surface, player, speed_fraction)
-
         # A ring at exactly `radius`: the ship is the smallest important thing on a busy screen,
         # and this both finds it for the eye and draws the true collision circle rather than
         # flattering it — the sprite reads as a ship, but what the physics collides with is this.
@@ -780,6 +775,15 @@ class ArenaRenderer:
         if flicker:
             sprite.set_alpha(90)
         surface.blit(sprite, sprite.get_rect(center=self.to_screen(player.x, player.y)))
+
+        # Drawn after the sprite, not before: the sprite's own footprint is wider than the flame's
+        # base offset and would otherwise paint over most of it, leaving only a sliver too thin to
+        # survive the pixel-downscale pass.
+        top_speed = player.config.speed
+        speed_fraction = min(1.0, player.speed / top_speed) if top_speed > 0 else 0.0
+        if speed_fraction > 0.02:
+            self._draw_engine_flame(surface, player, speed_fraction)
+
         self._draw_health_bar(surface, player, width=44, offset=player.radius + 14)
 
     def _draw_engine_flame(self, surface: pygame.Surface, player: Any, strength: float) -> None:
