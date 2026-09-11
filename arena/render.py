@@ -448,14 +448,17 @@ class ArenaRenderer:
         *,
         debug_snapshot: ArenaDebugSnapshot | None = None,
         policy_status: str = "No model diagnostics supplied",
+        show_retry_prompt: bool = False,
     ) -> pygame.Surface:
         """Render one frame of `env`. Returns the surface, so headless callers can inspect it.
 
         `policy_view` is what the agent's network computed for the observation on screen. It is
         optional because human play and the render tests have no model behind them; when it is
         absent the policy panel is simply not drawn. `debug_snapshot` and `policy_status` feed the
-        F3 debug panel only -- both keyword-only with defaults, so every existing caller of `draw`
-        is unaffected.
+        F3 debug panel only. `show_retry_prompt` draws the "PRESS R TO RETRY" line under the
+        end-of-episode banner; `play_arena.py` sets it only while actually waiting on that key from
+        a human, so an agent playback or headless/report-figure run never shows it. All three are
+        keyword-only with defaults, so every existing caller of `draw` is unaffected.
         """
         self.mechanics_visible = env.mechanics
         surface = self._ensure_surface()
@@ -520,6 +523,8 @@ class ArenaRenderer:
         # ending still outranks the episode continuing, just via a condition now, not draw order.
         if self._banner_remaining > 0.0 and env.player.alive and env.steps < env.max_episode_steps:
             self._draw_phase_banner(surface)
+        if show_retry_prompt:
+            self._draw_retry_prompt(surface)
 
         if not self.headless:
             pygame.display.flip()
@@ -1199,6 +1204,18 @@ class ArenaRenderer:
         pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
         pygame.draw.rect(surface, COLOR_VICTORY, backdrop, width=2, border_radius=8)
         surface.blit(text, rect)
+
+    def _draw_retry_prompt(self, surface: pygame.Surface) -> None:
+        """A blinking line under the end-of-episode banner, only while a human is actually being
+        asked to press something -- see `show_retry_prompt` on `draw()`.
+
+        Crisp, not pixelated, for the same reason the title screen's own prompt is: at this font
+        size the downscale round trip blurs letterforms rather than chunking them.
+        """
+        mid_x, mid_y = ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2
+        if int(self._elapsed / 0.6) % 2 == 0:
+            prompt = self.font_hud.render("PRESS R TO RETRY   ESC TO QUIT", True, COLOR_TEXT_DIM)
+            surface.blit(prompt, prompt.get_rect(center=(mid_x, mid_y + 70)))
 
 
 def _nearest_to(player: Any, candidates: Any) -> Any | None:

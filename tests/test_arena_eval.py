@@ -215,6 +215,65 @@ class TestTitleScreenGate:
         assert result["frames"] == 0
 
 
+class TestRetryLoop:
+    """A real human session replays on R rather than stopping at `episodes` -- see `play()`'s
+    `interactive` flag. Each episode here is forced to end after one step (`_end_immediately`
+    below), so these run in milliseconds rather than waiting out a full arena episode."""
+
+    #: Captured before any test monkeypatches `ArenaEnv.step`, so the wrapper below calls the
+    #: real physics rather than recursing into itself once patched onto the class. A plain
+    #: function, not a bound method, so assigning it to `ArenaEnv.step` still rebinds correctly
+    #: through the normal descriptor protocol when a test calls `env.step(action)`.
+    _real_step = ArenaEnv.step
+
+    @staticmethod
+    def _end_immediately(env, action):
+        obs, reward, _terminated, truncated, info = TestRetryLoop._real_step(env, action)
+        return obs, reward, True, truncated, info
+
+    def test_a_headless_human_call_never_waits_for_retry(self, monkeypatch):
+        import eval.play_arena as play_arena_module
+
+        def _fail_if_called(*_args, **_kwargs):
+            raise AssertionError("wait_for_retry must not run for a headless call")
+
+        monkeypatch.setattr(play_arena_module, "wait_for_retry", _fail_if_called)
+        play("direct", episodes=1, seed=0, human=True, headless=True)
+
+    def test_a_frame_capped_call_never_waits_for_retry(self, monkeypatch):
+        import eval.play_arena as play_arena_module
+
+        def _fail_if_called(*_args, **_kwargs):
+            raise AssertionError("wait_for_retry must not run for a frame-capped call")
+
+        monkeypatch.setattr(play_arena_module, "wait_for_retry", _fail_if_called)
+        result = play("direct", episodes=1, seed=0, human=True, max_frames=3)
+        assert result["frames"] == 3
+
+    def test_pressing_r_replays_ignoring_the_episode_count(self, monkeypatch):
+        """Asking for one episode but answering the retry prompt "yes" once should still play two
+        -- a real human session is driven by R, not by `--episodes`."""
+        import eval.play_arena as play_arena_module
+
+        answers = iter([True, False])
+        monkeypatch.setattr(play_arena_module, "wait_for_start", lambda *_a, **_k: True)
+        monkeypatch.setattr(play_arena_module, "wait_for_retry", lambda *_a, **_k: next(answers))
+        monkeypatch.setattr(ArenaEnv, "step", self._end_immediately)
+
+        result = play("direct", episodes=1, seed=0, human=True)
+        assert result["episodes"] == 2
+
+    def test_quitting_the_retry_prompt_stops_the_session(self, monkeypatch):
+        import eval.play_arena as play_arena_module
+
+        monkeypatch.setattr(play_arena_module, "wait_for_start", lambda *_a, **_k: True)
+        monkeypatch.setattr(play_arena_module, "wait_for_retry", lambda *_a, **_k: False)
+        monkeypatch.setattr(ArenaEnv, "step", self._end_immediately)
+
+        result = play("direct", episodes=5, seed=0, human=True)
+        assert result["episodes"] == 1
+
+
 # --- helpers ----------------------------------------------------------------------------------------
 
 
