@@ -268,6 +268,24 @@ def test_the_hud_prints_the_phase_number_the_env_is_actually_in(env, renderer):
     assert "PHASE 2" in renderer.font_banner.drawn, renderer.font_banner.drawn
 
 
+def test_the_game_over_banner_shows_on_death_but_not_on_survival(env, renderer):
+    """No countdown to latch here, unlike the phase banner: `player.alive` stays False for the
+    rest of the episode, so the banner should hold for every frame death draws, not just one."""
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.draw(env)
+    assert "GAME OVER" not in renderer.font_banner.drawn
+
+    env.player.kill()
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.draw(env)
+    assert "GAME OVER" in renderer.font_banner.drawn
+
+    renderer.font_banner = RecordingFont(renderer.font_banner)
+    for _ in range(5):
+        renderer.draw(env)
+    assert "GAME OVER" in renderer.font_banner.drawn, "should not need a per-frame trigger"
+
+
 def test_phase_banner_latches_for_its_own_countdown(env, renderer):
     """`phase_just_advanced` is true for one step; the banner must outlive it on screen."""
     for spawner in env.spawners:

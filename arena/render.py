@@ -88,6 +88,7 @@ COLOR_OVERLAY_SPAWNER = (216, 150, 250)
 COLOR_OVERLAY_HEADING = (120, 230, 190)
 COLOR_STAR_DIM = (52, 58, 76)
 COLOR_STAR_BRIGHT = (158, 168, 202)
+COLOR_DANGER = (240, 90, 78)
 # Distinct from COLOR_PLAYER and COLOR_ACCENT on purpose: the panel is read by counting exact
 # pixel values in the render tests, and a colour shared with the ship makes that ambiguous.
 COLOR_POLICY_BAR = (92, 164, 246)
@@ -320,6 +321,8 @@ class ArenaRenderer:
         self._draw_hud(surface, env, policy_view)
         if self._banner_remaining > 0.0:
             self._draw_phase_banner(surface)
+        if not env.player.alive:
+            self._draw_game_over_banner(surface)
 
         if not self.headless:
             pygame.display.flip()
@@ -804,6 +807,21 @@ class ArenaRenderer:
         backdrop = rect.inflate(48, 28)
         pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
         pygame.draw.rect(surface, COLOR_ACCENT, backdrop, width=2, border_radius=8)
+        surface.blit(text, rect)
+
+    def _draw_game_over_banner(self, surface: pygame.Surface) -> None:
+        """A centred banner once the player has died, drawn every frame death holds true.
+
+        Needs no countdown of its own, unlike the phase banner: `player.alive` stays False for
+        the rest of the episode, so the condition that shows this is already latched by the sim.
+        Drawn after the phase banner so it wins the rare frame where a kill and a phase advance
+        land together — the episode ending outranks the episode continuing.
+        """
+        text = self.font_banner.render("GAME OVER", True, COLOR_DANGER)
+        rect = text.get_rect(center=(ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2))
+        backdrop = rect.inflate(48, 28)
+        pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
+        pygame.draw.rect(surface, COLOR_DANGER, backdrop, width=2, border_radius=8)
         surface.blit(text, rect)
 
 
