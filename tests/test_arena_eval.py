@@ -41,6 +41,7 @@ from eval.play_arena import (  # noqa: E402
     play,
     resolve_model,
     shipped_checkpoints,
+    wait_for_start,
     write_results,
 )
 
@@ -179,6 +180,44 @@ class TestPlayHumanMode:
             env = ArenaEnv(control_style=style)
             for keys in probes:
                 assert env.action_space.contains(human_action(keys, style))
+
+
+class TestTitleScreenGate:
+    """The title screen must appear only where a person could plausibly press SPACE for it."""
+
+    def test_a_headless_call_never_shows_the_title_screen(self, monkeypatch):
+        """A regression guard, not a happy-path check: if `play()`'s `not headless` condition is
+        ever dropped, this fails immediately instead of the row-I evidence table silently hanging
+        the next time someone regenerates it."""
+        import eval.play_arena as play_arena_module
+
+        def _fail_if_called(*_args, **_kwargs):
+            raise AssertionError("wait_for_start must not run for a headless call")
+
+        monkeypatch.setattr(play_arena_module, "wait_for_start", _fail_if_called)
+        play("direct", episodes=1, seed=0, headless=True, random_policy=True)
+
+    def test_a_frame_capped_call_never_shows_the_title_screen(self, monkeypatch):
+        """Report-figure capture passes `--frames`; it must get exactly that many gameplay frames,
+        not one spent on a title screen it is never watching for."""
+        import eval.play_arena as play_arena_module
+
+        def _fail_if_called(*_args, **_kwargs):
+            raise AssertionError("wait_for_start must not run for a frame-capped call")
+
+        monkeypatch.setattr(play_arena_module, "wait_for_start", _fail_if_called)
+        result = play("direct", episodes=1, seed=0, human=True, max_frames=3)
+        assert result["frames"] == 3
+
+    def test_quitting_at_the_title_screen_exits_cleanly_with_no_episodes_played(self, monkeypatch):
+        """`wait_for_start` returning False is the window-closed / ESC path; `play()` should exit
+        the same way it already does for a mid-episode quit, not raise or hang."""
+        import eval.play_arena as play_arena_module
+
+        monkeypatch.setattr(play_arena_module, "wait_for_start", lambda *_a, **_k: False)
+        result = play("direct", episodes=5, seed=0, random_policy=True)
+        assert result["episodes"] == 0
+        assert result["frames"] == 0
 
 
 # --- helpers ----------------------------------------------------------------------------------------

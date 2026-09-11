@@ -1,7 +1,7 @@
 # A3 — Reinforcement Learning and DL Agents
 
 Games and Artificial Intelligence Techniques · RMIT · Group of 3 · 40% of course grade
-**Due: 19 September 2026, 11:59 PM**
+**Due: 13 September 2026, 11:59 PM**
 
 Part I is tabular Q-learning and SARSA in a Pygame gridworld across seven levels. Part II is a
 real-time Pygame arena with two deep RL agents trained by Stable Baselines3, one per control scheme.
@@ -14,15 +14,43 @@ by the test suite. **Where anything disagrees with the brief, the brief wins.**
 
 | Member           | Student number | Owns |
 | ---------------- | -------------- | ---- |
-| Do Le Trang Hanh | s3977994       |      |
-| Huynh Thai Duong | s3978955       |      |
-| Tran Minh Nghia  | s4123236       |      |
+| Huynh Thai Duong | s3978955       | Both environments end to end: gridworld core, renderer, levels 0–6, Q-learning, SARSA, the intrinsic reward experiment; arena entities/physics, the Gym-style API, the arena renderer/HUD, and training + evaluation for both control schemes |
+| Do Le Trang Hanh | s3977994       | Part II training rigor: the TensorBoard pipeline, the hyperparameter sweep, environment validation, a stale-observation regression fix and retrain; on-screen algorithm visibility across both environments; process (ticket board, milestone audits, this shared agent context) |
+| Tran Minh Nghia  | s4123236       | Creativity beyond the brief: opt-in arena mechanics (shield pickups, elite chargers) with matching visual effects, the gridworld learning-internals debug overlay, and arena policy/reward/physics debugging tooling |
 
 Part II training, evaluation, the sweep and the report are shared work — Part II is roughly half the
-marks and too large for one person. **This table is still unfilled and it is now blocking marks**
-(ticket [A3-017](docs/tickets/A3-017-decide-ownership-and-fill-in-the.md)): the report must list
-every student number and a contribution summary, and everyone must appear in the video presenting at
-least one part.
+marks and too large for one person. A fuller, per-commit breakdown is in
+[Contributions](#contributions) below, and the exact text for the report's contribution table is in
+[`report/contributions.md`](report/contributions.md). Ticket
+[A3-017](docs/tickets/A3-017-decide-ownership-and-fill-in-the.md) still needs the individual ticket
+owner fields (A3-001–A3-015) filled in before it can close; everyone must also appear in the video
+presenting at least one part.
+
+## Contributions
+
+Derived from `git log`, not self-reported — every claim below traces to a commit subject on `main`.
+
+**Huynh Thai Duong (s3978955)** built both environments end to end. Part I: the gridworld
+constants, seven level layouts and environment core (rubric A), the Pygame renderer, Q-learning on
+level 0 (B), SARSA with the level 1 comparison (C), and the extension through levels 2–6 including
+the intrinsic reward experiment (D, F). Part II: the arena entity simulation and physics (G), the
+Gym-style API with the literal 4-tuple legacy adapter (H), the arena renderer/HUD/observation
+overlay, and the training and playback scripts for both control schemes (I). Also set up the repo
+scaffolding and the file-based ticket-tracking workflow.
+
+**Do Le Trang Hanh (s3977994)** built the training and measurement rigor behind Part II and the
+visibility work that makes both parts' algorithms inspectable on screen. Specifically: the
+TensorBoard-logged training pipeline (J2), the hyperparameter sweep and its tabulation (J3),
+pre-training environment validation and playback-before-training checks, diagnosing and fixing a
+stale-observation-feature regression with a full retrain, and re-measuring the arena evaluation
+tables against the corrected models. Also wrote the milestone evaluation audits in
+`docs/evaluations/`, curated the ticket board and README.
+
+**Tran Minh Nghia (s4123236)** implemented the project's creativity work: opt-in arena mechanics
+(shield pickups, elite charger enemies) with matching visual feedback (muzzle flash, hit/death
+particles, screen shake), the gridworld learning-internals debug overlay that exposes the live TD
+update (Q-values before/after, TD target and error, the ε-greedy branch taken, and the intrinsic
+reward breakdown), and arena policy/reward/physics debugging tooling.
 
 ## Setup
 

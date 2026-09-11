@@ -83,6 +83,7 @@ from .constants import (
     DirectAction,
     RotationAction,
 )
+from .debug import REWARD_TERMS, RewardSnapshot
 from .entities import Bullet, Enemy, Player, Spawner, phase_config
 from .observation import build_observation, describe, mechanic_observation, observation_scales
 from .mechanics import EliteCharger, MechanicsConfig, ShieldPickup
@@ -168,6 +169,9 @@ class ArenaEnv(gym.Env):
         self.pickups_collected = 0
         self.elites_killed = 0
         self.episode_reward = 0.0
+        self.reward_totals = dict.fromkeys(REWARD_TERMS, 0.0)
+        self._step_rewards = dict.fromkeys(REWARD_TERMS, 0.0)
+        self.latest_reward: RewardSnapshot | None = None
         self.last_action = 0
         self._phase_advanced_this_step = False
         self._last_observation: np.ndarray | None = None
@@ -198,7 +202,8 @@ class ArenaEnv(gym.Env):
         # countdown, because at 60 fps a one-step flag would flash the banner for a single frame.
         self._phase_advanced_this_step = False
 
-        reward = REWARD_PER_STEP
+        self._step_rewards = dict.fromkeys(REWARD_TERMS, 0.0)
+        reward = self._record_reward("step", REWARD_PER_STEP)
         for _ in range(ACTION_REPEAT):
             reward += self._advance_frame(action)
             if not self.player.alive:
@@ -209,7 +214,18 @@ class ArenaEnv(gym.Env):
         # Distinct by construction: a step cap is not a rule of the game, and an agent that is
         # still alive when the clock runs out must keep bootstrapping from its final value.
         truncated = not terminated and self.steps >= self.max_episode_steps
+        # Canonical sum of the actual contributions captured at each reward site, so a site that
+        # forgets to route through `_record_reward` is silently dropped rather than
+        # double-counted -- the quieter of the two failure modes, and why the mutation test on
+        # `_record_reward` exists.
+        reward = sum(self._step_rewards.values())
         self.episode_reward += reward
+        for term, value in self._step_rewards.items():
+            self.reward_totals[term] += value
+        self.latest_reward = RewardSnapshot(
+            self.steps, action, tuple(self._step_rewards.items()),
+            tuple(self.reward_totals.items()), float(reward), terminated, truncated,
+        )
 
         return self._observation(), float(reward), terminated, truncated, self._info()
 
@@ -379,6 +395,11 @@ class ArenaEnv(gym.Env):
 
     # --- collisions and rewards -----------------------------------------------------------------
 
+    def _record_reward(self, term: str, value: float) -> float:
+        """Record a fired reward at its source; drawing never calls this method."""
+        self._step_rewards[term] += value
+        return value
+
     def _advance_pickups(self) -> None:
         for pickup in self.pickups:
             pickup.update()
@@ -402,7 +423,7 @@ class ArenaEnv(gym.Env):
                         self.enemies_killed += 1
                         if isinstance(enemy, EliteCharger):
                             self.elites_killed += 1
-                        reward += REWARD_ENEMY_DESTROYED
+                        reward += self._record_reward("enemy", REWARD_ENEMY_DESTROYED)
                     break
             if not bullet.alive:
                 continue
@@ -415,7 +436,7 @@ class ArenaEnv(gym.Env):
                         if self.mechanics:
                             self.pickups.append(ShieldPickup(spawner.x, spawner.y,
                                                              self.mechanics_config))
-                        reward += REWARD_SPAWNER_DESTROYED
+                        reward += self._record_reward("spawner", REWARD_SPAWNER_DESTROYED)
                     break
         return reward
 
@@ -431,9 +452,9 @@ class ArenaEnv(gym.Env):
                 continue
             if self.player.take_damage(enemy.contact_damage):
                 self.damage_taken += enemy.contact_damage
-                reward += REWARD_DAMAGE_TAKEN
+                reward += self._record_reward("damage", REWARD_DAMAGE_TAKEN)
                 if not self.player.alive:
-                    reward += REWARD_DEATH
+                    reward += self._record_reward("death", REWARD_DEATH)
                     break
         return reward
 
@@ -453,7 +474,7 @@ class ArenaEnv(gym.Env):
         self.phase += 1
         self._phase_advanced_this_step = True
         self._begin_phase()
-        return REWARD_PHASE_ADVANCE
+        return self._record_reward("phase", REWARD_PHASE_ADVANCE)
 
     # --- observation and info --------------------------------------------------------------------
 
