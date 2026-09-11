@@ -7,16 +7,15 @@ Contract: `ArenaRenderer` owns the pygame window and draws the env it is handed.
 only when `render_mode` is set, and nothing in the simulation path may call into it. It reads the
 env and never writes to it — every effect below is cosmetic, so evaluation always matches training.
 
-The brief only requires that a ship, enemies, spawners and projectiles be visually distinct and
-on screen — it does not fix their shapes, so the primitives below carry actual character design
-rather than flat placeholders: the ship is a triangular hull with a canopy and a thruster flame
-that lengthens with speed, grunts are spiked drones with an eye that tracks their travel direction
-(or the charge direction while an elite is winding up), and spawners are rotating-core hexes rather
-than static squares. Every added stroke still reads at video resolution and is derived from real
-entity state (health, velocity, spawn countdown) rather than being decorative for its own sake.
-Health bars sit over the player, enemies and spawners. A HUD shows phase, health, score, step count
-and the current action name — the HUD is what makes the video's "clear evidence the agent follows a
-learned policy" legible to a marker.
+The brief only requires that a ship, enemies, spawners and projectiles be visually distinct and on
+screen — it does not fix their shapes. The ship and spawner are the supplied sprite art, but the
+motion around them still carries real state: the ship trails a thruster flame that lengthens with
+speed and sits inside its true collision ring, the spawner is ringed by vent spikes that spin faster
+as its next spawn nears. Grunts are still spiked drones with an eye that tracks their travel
+direction (or the charge direction while an elite is winding up). Health bars sit over the player,
+enemies and spawners. A HUD shows phase, health, score, step count and the current action name — the
+HUD is what makes the video's "clear evidence the agent follows a learned policy" legible to a
+marker.
 
 The observation overlay (toggle with O or TAB, default from `show_observation_overlay` in
 `config/arena.yaml`) draws exactly what the agent sees: lines to the nearest enemy and nearest
@@ -44,6 +43,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 import pygame
@@ -364,6 +364,23 @@ class ArenaRenderer:
         self._banner_remaining = 0.0
         self._banner_phase = 0
         self._elapsed = 0.0
+
+        # Resolve relative to the module, so playback works from any working directory.
+        # Keep the original alpha: convert_alpha() requires a display in headless tests.
+        assets = Path(__file__).resolve().parents[1] / "assets" / "arena"
+        self.agent_sprite = self._load_sprite(assets / "agent.png", 45)
+        self.spawner_sprite = self._load_sprite(assets / "spawner.png", 64)
+
+    @staticmethod
+    def _load_sprite(path: Path, size: int) -> pygame.Surface:
+        """Trim transparent margins and fit pixel art without stretching its proportions."""
+        sprite = pygame.image.load(str(path))
+        sprite = sprite.subsurface(sprite.get_bounding_rect()).copy()
+        scale = size / max(sprite.get_size())
+        return pygame.transform.scale(
+            sprite, (max(1, round(sprite.get_width() * scale)),
+                     max(1, round(sprite.get_height() * scale)))
+        )
 
     # --- geometry ---------------------------------------------------------------------------
 
@@ -744,29 +761,34 @@ class ArenaRenderer:
     # --- entities -----------------------------------------------------------------------------
 
     def _draw_player(self, surface: pygame.Surface, player: Any) -> None:
-        """A triangular hull with a canopy and a thruster flame, flickering while invulnerable."""
+        """The supplied ship sprite, with its flame and collision ring still driven by live
+        player state; flickers while invulnerable."""
         if not player.alive:
             return
         # A hit is legible only if it is visible: alternate the fill during the invulnerability
         # window so the player and the marker can both see the damage land.
         flicker = player.is_invulnerable and int(self._elapsed * 20.0) % 2 == 0
-        color = COLOR_PLAYER_HIT if flicker else COLOR_PLAYER
 
+        # A ring at exactly `radius`: the ship is the smallest important thing on a busy screen,
+        # and this both finds it for the eye and draws the true collision circle rather than
+        # flattering it — the sprite reads as a ship, but what the physics collides with is this.
+        pygame.draw.circle(surface, COLOR_PLAYER_OUTLINE,
+                           self.to_screen(player.x, player.y), round(player.radius), 1)
+
+        # Source art points up; physics heading zero points right, with positive y down.
+        sprite = pygame.transform.rotate(self.agent_sprite, -90 - math.degrees(player.heading))
+        if flicker:
+            sprite.set_alpha(90)
+        surface.blit(sprite, sprite.get_rect(center=self.to_screen(player.x, player.y)))
+
+        # Drawn after the sprite, not before: the sprite's own footprint is wider than the flame's
+        # base offset and would otherwise paint over most of it, leaving only a sliver too thin to
+        # survive the pixel-downscale pass.
         top_speed = player.config.speed
         speed_fraction = min(1.0, player.speed / top_speed) if top_speed > 0 else 0.0
         if speed_fraction > 0.02:
             self._draw_engine_flame(surface, player, speed_fraction)
 
-        # A ring at exactly `radius`: the ship is the smallest important thing on a busy screen,
-        # and this both finds it for the eye and draws the true collision circle rather than
-        # flattering it — the hull is a triangle, but what the physics collides with is this.
-        pygame.draw.circle(surface, COLOR_PLAYER_OUTLINE,
-                           self.to_screen(player.x, player.y), round(player.radius), 1)
-
-        points = self._ship_points(player)
-        pygame.draw.polygon(surface, color, points)
-        pygame.draw.polygon(surface, COLOR_PLAYER_OUTLINE, points, width=2)
-        self._draw_cockpit(surface, player)
         self._draw_health_bar(surface, player, width=44, offset=player.radius + 14)
 
     def _draw_engine_flame(self, surface: pygame.Surface, player: Any, strength: float) -> None:
@@ -787,31 +809,6 @@ class ArenaRenderer:
             tip = self.to_screen(player.x + math.cos(tail) * (base + reach),
                                  player.y + math.sin(tail) * (base + reach))
             pygame.draw.polygon(surface, color, [left, right, tip])
-
-    def _draw_cockpit(self, surface: pygame.Surface, player: Any) -> None:
-        """A small canopy dot toward the nose — the detail that reads as "a pilot flies this"."""
-        nose = player.radius * 0.5
-        center = self.to_screen(player.x + math.cos(player.heading) * nose,
-                                player.y + math.sin(player.heading) * nose)
-        pygame.draw.circle(surface, COLOR_PLAYER_CANOPY, center,
-                           max(2, round(player.radius * 0.26)))
-
-    def _ship_points(self, player: Any) -> list[tuple[int, int]]:
-        """Nose along the heading, two rear corners swept back from it."""
-        nose = player.radius * 1.6
-        sweep = 2.5  # radians back from the nose; wide enough to read at small sizes
-        points = []
-        for angle, reach in (
-            (player.heading, nose),
-            (player.heading + sweep, player.radius),
-            (player.heading - sweep, player.radius),
-        ):
-            points.append(
-                self.to_screen(
-                    player.x + math.cos(angle) * reach, player.y + math.sin(angle) * reach
-                )
-            )
-        return points
 
     def _enemy_facing(self, enemy: Any) -> float:
         """Where the enemy's "eye" and spikes point: the direction it is actually moving, an
@@ -860,7 +857,8 @@ class ArenaRenderer:
             self._draw_health_bar(surface, enemy, width=30, offset=enemy.radius + 10)
 
     def _draw_spawner(self, surface: pygame.Surface, spawner: Any) -> None:
-        """A rotating-core hex that pulses as its next spawn nears and shrinks as health drops."""
+        """Spawner sprite pulses as its next spawn nears and shrinks as health drops, ringed by
+        vent spikes that speed up their rotation as the spawn timer closes in."""
         # Pulse tracks the spawn timer rather than wall time, so what the viewer sees expanding is
         # the actual countdown to the next enemy.
         interval = max(1e-6, spawner.spawn_interval)
@@ -869,26 +867,18 @@ class ArenaRenderer:
         radius = spawner.radius * (0.55 + 0.45 * spawner.health_fraction) * pulse
         center = self.to_screen(spawner.x, spawner.y)
 
-        # Vent spikes sit behind the hex body and speed up their rotation as the spawn timer
-        # closes in, so the "about to spawn" cue is read from real state, not a fake flourish.
+        # Vent spikes sit behind the sprite and speed up their rotation as the spawn timer closes
+        # in, so the "about to spawn" cue is read from real state, not baked into static art.
         self._draw_spikes(surface, center, radius * 0.75, self._elapsed * (0.4 + 0.6 * progress),
                           count=6, length=radius * 0.32, color=COLOR_SPAWNER_VENT)
-        hex_points = [
-            (center[0] + math.cos(math.tau * i / 6) * radius,
-             center[1] + math.sin(math.tau * i / 6) * radius)
-            for i in range(6)
-        ]
-        pygame.draw.polygon(surface, COLOR_SPAWNER, hex_points)
-        pygame.draw.polygon(surface, COLOR_SPAWNER_CORE, hex_points, width=2)
 
-        core_angle = self._elapsed * (1.2 + progress)
-        core_radius = radius * 0.4
-        core_points = [
-            (center[0] + math.cos(core_angle + math.tau * i / 3) * core_radius,
-             center[1] + math.sin(core_angle + math.tau * i / 3) * core_radius)
-            for i in range(3)
-        ]
-        pygame.draw.polygon(surface, COLOR_SPAWNER_CORE, core_points)
+        scale = radius * 2 / max(self.spawner_sprite.get_size())
+        sprite = pygame.transform.scale(
+            self.spawner_sprite,
+            (max(1, round(self.spawner_sprite.get_width() * scale)),
+             max(1, round(self.spawner_sprite.get_height() * scale))),
+        )
+        surface.blit(sprite, sprite.get_rect(center=center))
         self._draw_health_bar(surface, spawner, width=52, offset=spawner.radius + 16)
 
     def _draw_bullet(self, surface: pygame.Surface, bullet: Any) -> None:
