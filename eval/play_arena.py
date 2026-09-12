@@ -30,6 +30,10 @@ looks like a result and is not is worse than no table.
 uses. It is a creativity feature, and it is also the fastest way to tell a broken environment from a
 badly trained agent: if a person cannot clear phase 1 either, the problem is not the policy.
 
+In `--human` play, an episode's end (death or survival) freezes on that last frame — meme easter
+egg included — until R is pressed to retry; an agent demo keeps its fixed `DEATH_HOLD_SECONDS`
+beat instead, since it has to run unattended for recording.
+
 Input handling: the renderer pumps the event queue for window-level events (quit, overlay toggle),
 and human control reads `pygame.key.get_pressed()` instead of the queue. Held keys are the right
 model for a real-time game anyway -- you hold thrust, you do not tap it -- and reading key *state*
@@ -506,6 +510,12 @@ def wait_for_start(renderer, style: str, mechanics: bool = False) -> bool:
 
 
 def wait_for_retry(renderer, env, view) -> bool:
+    """Freeze on the finished episode — meme, banner and all — until the player retries.
+
+    Human play only. `DEATH_HOLD_SECONDS`/`renderer.hold()` is a fixed beat meant for an agent
+    demo that has to keep running unattended for recording; a human who just died gets to
+    actually read the meme caption instead of it flashing by in a second. Returns False on quit,
+    mirroring `wait_for_start`.
     """Hold on the end banner until R (retry) or the window closes. Returns False to quit.
 
     `env` and `view` are the finished episode's own state, unmodified -- this only keeps redrawing
@@ -619,7 +629,11 @@ def play(
             # panel stays up through the hold instead of blinking off for the closing shot.
             renderer.draw(env, view)
             if max_frames is None:
-                renderer.hold(env, view)
+                if human and not headless:
+                    if not wait_for_retry(renderer, env, view):
+                        raise KeyboardInterrupt
+                else:
+                    renderer.hold(env, view)
             returns.append(float(env.episode_reward))
             phases.append(int(info.get("phase", 1)))
             episode += 1

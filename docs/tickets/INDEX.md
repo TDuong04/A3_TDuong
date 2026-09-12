@@ -51,6 +51,7 @@ _none_
 | [A3-029](A3-029-add-gridworld-learning-internals-debug-overlay.md) | P1 | feature | Add gridworld learning internals debug overlay | Creativity | 5 | gridworld | unassigned | [#54](https://github.com/TDuong04/A3_TDuong/issues/54) |
 | [A3-016](A3-016-add-gitattributes-to-normalise-line-endings.md) | P2 | chore | Add .gitattributes to normalise line endings | none | — | infra | unassigned | [#16](https://github.com/TDuong04/A3_TDuong/issues/16) |
 | [A3-031](A3-031-arena-character-art-and-effect-compositing.md) | P2 | feature | Arena character art and correct effect compositing (Part II visual pass) | G | — | arena | unassigned | [#55](https://github.com/TDuong04/A3_TDuong/issues/55) |
+| [A3-033](A3-033-add-a-cat-meme-easter-egg-overlay.md) | P2 | feature | Add a cat-meme easter egg overlay on episode end, with a retry-and-wait human play loop | Creativity | — | eval | unassigned | — |
 
 ## Won't fix
 
