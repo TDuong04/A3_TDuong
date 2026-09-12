@@ -325,9 +325,12 @@ class GridRenderer:
             self.sprites[name] = pygame.transform.scale(sprite, size)
 
         # Meme easter egg: shared with the arena renderer, so it lives one level up in
-        # assets/memes rather than assets/gridworld.
+        # assets/memes rather than assets/gridworld. Smaller than the arena version (cell * 2.0,
+        # not cell * 3.0): the verdict banner is now the dominant element on this end screen (see
+        # `_draw_end_banner`), so the meme is a secondary flourish underneath it rather than the
+        # only thing announcing the episode ended.
         memes = Path(__file__).resolve().parents[1] / "assets" / "memes"
-        meme_extent = cell * 3.0
+        meme_extent = cell * 2.0
         self.meme_sprites: dict[str, pygame.Surface] = {}
         for name in ("lose_kitten", "lose_crying", "win_dancing"):
             path = next(memes.glob(f"{name}.*"))
@@ -339,6 +342,10 @@ class GridRenderer:
         self._meme_kind: str | None = None
         self._meme_start: float = 0.0
         self._meme_elapsed: float = 0.0
+        #: One fitted font per (text, max_width) the verdict banner has actually drawn -- cheap to
+        #: keep around, and it means fitting only happens once per grid size instead of every frame
+        #: the end screen holds.
+        self._font_end_cache: dict[tuple[str, int], pygame.font.Font] = {}
 
         self.surface: pygame.Surface | None = None
         self._clock: pygame.time.Clock | None = None
@@ -680,8 +687,58 @@ class GridRenderer:
             label = self.font_hud.render(state_text, True, color)
             surface.blit(label, label.get_rect(midright=(surface.get_width() - 10, bar.centery)))
 
+    @staticmethod
+    def _fit_font(texts: tuple[str, ...], max_width: int, start_size: int, min_size: int = 18) -> pygame.font.Font:
+        """The largest point size, down to `min_size`, at which every string in `texts` still
+        renders no wider than `max_width`. Mirrors `ArenaRenderer._fit_font`."""
+        size = start_size
+        while size > min_size:
+            font = pygame.font.Font(None, size)
+            if all(font.size(text)[0] <= max_width for text in texts):
+                return font
+            size -= 4
+        return pygame.font.Font(None, min_size)
+
+    def _end_font(self, text_str: str, max_width: int, start_size: int) -> pygame.font.Font:
+        """A cached `_fit_font` result, keyed on the string and its width budget -- both depend
+        on the grid's own size, not just `cell_size`, so this can't be precomputed once at
+        construction the way the arena renderer's fixed-size `font_end` is."""
+        key = (text_str, max_width)
+        font = self._font_end_cache.get(key)
+        if font is None:
+            font = self._fit_font((text_str,), max_width=max_width, start_size=start_size)
+            self._font_end_cache[key] = font
+        return font
+
+    def _draw_end_banner(
+        self, surface: pygame.Surface, text_str: str, color: tuple,
+        field_w: float, field_h: float, cx: float, cy: float,
+    ) -> float:
+        """The episode's verdict, drawn as the dominant element on screen: a near-full-width panel
+        with a chunky, drop-shadowed headline -- the same treatment as the arena renderer's
+        `_draw_end_banner`, so the two halves of the project read as one visual language rather
+        than the small text-in-a-pill banner this used to be.
+
+        Returns the panel's bottom edge in surface coordinates, so `_draw_meme_overlay` can lay
+        the meme out beneath it instead of guessing a fixed offset from the field's own centre.
+        """
+        panel = pygame.Rect(0, 0, int(field_w * 0.88), int(field_h * 0.30))
+        panel.center = (round(cx), round(cy))
+        pygame.draw.rect(surface, COLOR_PANEL, panel, border_radius=14)
+        pygame.draw.rect(surface, color, panel, width=5, border_radius=14)
+        pygame.draw.rect(surface, color, panel.inflate(-18, -18), width=2, border_radius=10)
+
+        font = self._end_font(text_str, int(panel.width * 0.88), int(panel.height * 0.6))
+        shadow = font.render(text_str, True, (18, 18, 22))
+        text = font.render(text_str, True, color)
+        rect = text.get_rect(center=panel.center)
+        surface.blit(shadow, rect.move(4, 4))
+        surface.blit(text, rect)
+        return panel.bottom
+
     def _draw_meme_overlay(self, surface: pygame.Surface, env: GridWorld) -> None:
-        """A bouncing cat meme and a jokey plea for marks, shown once the episode ends.
+        """The dominant verdict banner, plus a bouncing cat meme and a jokey plea for marks,
+        shown once the episode ends.
 
         Purely cosmetic: it reads `env.died`/`env.terminated` but never writes anything the
         algorithms depend on, and it is drawn alongside the existing HUD "DEAD"/"SOLVED" label
@@ -710,13 +767,18 @@ class GridRenderer:
             names = ("lose_kitten", "lose_crying")
             caption = "Even though we lost, please still give us a good grade, Dr. Ginel Dorleon!"
             color = (226, 76, 96)
+            headline = "GAME OVER"
         else:
             names = ("win_dancing",)
-            caption = "Yayyy we won! Please give us a good grade!"
+            caption = "Yayyy we survived! Please give us a good grade!"
             color = COLOR_APPLE
+            headline = "SOLVED!"
 
-        bounce = abs(math.sin(t * 4.0)) * (cell * 0.28)
-        spacing = cell * 2.4
+        banner_bottom = self._draw_end_banner(surface, headline, color, field_w, field_h, cx, cy)
+        meme_cy = banner_bottom + cell * 1.1
+
+        bounce = abs(math.sin(t * 4.0)) * (cell * 0.2)
+        spacing = cell * 1.6
         start_x = cx - spacing * (len(names) - 1) / 2
         for index, name in enumerate(names):
             fly_t = min(1.0, max(0.0, t - index * 0.15) / 0.6)
@@ -725,7 +787,7 @@ class GridRenderer:
             from_x = cx + side * (field_w / 2 + cell * 2)
             target_x = start_x + index * spacing
             x = from_x + (target_x - from_x) * eased
-            y = cy - bounce
+            y = meme_cy - bounce
             angle = math.sin(t * 2.2 + index) * 10
             sprite = pygame.transform.rotate(self.meme_sprites[name], angle)
             surface.blit(sprite, sprite.get_rect(center=(round(x), round(y))))
@@ -733,7 +795,7 @@ class GridRenderer:
         lines = _wrap_text(self.font_small, caption, max(120, field_w - 20))
         rendered = [self.font_small.render(line, True, color) for line in lines]
         line_height = self.font_small.get_height()
-        block_top = cy + cell * 1.5
+        block_top = meme_cy + cell * 0.85
 
         backdrop = pygame.Rect(0, 0, max(t.get_width() for t in rendered) + 20,
                                 len(rendered) * (line_height + 2) + 8)

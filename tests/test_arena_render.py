@@ -299,40 +299,44 @@ def test_the_hud_prints_the_phase_number_the_env_is_actually_in(env, renderer):
 
 def test_the_victory_banner_shows_only_at_the_step_cap_while_alive(env, renderer):
     """The complement of the game-over banner: `truncated`, not `terminated`, with the ship still
-    standing. Not shown mid-episode, not shown alongside a death at the same instant."""
-    renderer.font_banner = RecordingFont(renderer.font_banner)
+    standing. Not shown mid-episode, not shown alongside a death at the same instant.
+
+    Recorded through `font_end`, not `font_banner`: the verdict banner is dominant enough to
+    warrant its own large font, sized separately from the much smaller, much more frequent phase
+    banner (see `ArenaRenderer._fit_font`)."""
+    renderer.font_end = RecordingFont(renderer.font_end)
     renderer.draw(env)
-    assert "YOU SURVIVED!" not in renderer.font_banner.drawn
+    assert "YOU SURVIVED!" not in renderer.font_end.drawn
 
     env.steps = env.max_episode_steps
-    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.font_end = RecordingFont(renderer.font_end)
     renderer.draw(env)
-    assert "YOU SURVIVED!" in renderer.font_banner.drawn
+    assert "YOU SURVIVED!" in renderer.font_end.drawn
 
     # Reaching the cap does not itself matter if the ship died on the very same step.
     env.player.kill()
-    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.font_end = RecordingFont(renderer.font_end)
     renderer.draw(env)
-    assert "YOU SURVIVED!" not in renderer.font_banner.drawn
-    assert "GAME OVER" in renderer.font_banner.drawn
+    assert "YOU SURVIVED!" not in renderer.font_end.drawn
+    assert "GAME OVER" in renderer.font_end.drawn
 
 
 def test_the_game_over_banner_shows_on_death_but_not_on_survival(env, renderer):
     """No countdown to latch here, unlike the phase banner: `player.alive` stays False for the
     rest of the episode, so the banner should hold for every frame death draws, not just one."""
-    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.font_end = RecordingFont(renderer.font_end)
     renderer.draw(env)
-    assert "GAME OVER" not in renderer.font_banner.drawn
+    assert "GAME OVER" not in renderer.font_end.drawn
 
     env.player.kill()
-    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.font_end = RecordingFont(renderer.font_end)
     renderer.draw(env)
-    assert "GAME OVER" in renderer.font_banner.drawn
+    assert "GAME OVER" in renderer.font_end.drawn
 
-    renderer.font_banner = RecordingFont(renderer.font_banner)
+    renderer.font_end = RecordingFont(renderer.font_end)
     for _ in range(5):
         renderer.draw(env)
-    assert "GAME OVER" in renderer.font_banner.drawn, "should not need a per-frame trigger"
+    assert "GAME OVER" in renderer.font_end.drawn, "should not need a per-frame trigger"
 
 
 def test_the_retry_prompt_only_shows_when_asked(env, renderer):

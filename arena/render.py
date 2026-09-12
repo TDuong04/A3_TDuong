@@ -352,6 +352,14 @@ class ArenaRenderer:
         self.font_hud = pygame.font.Font(None, 26)
         self.font_small = pygame.font.Font(None, 18)
         self.font_banner = pygame.font.Font(None, 54)
+        # The episode verdict ("GAME OVER" / "YOU SURVIVED!") is the one thing on screen that
+        # should dominate it, so it gets its own font rather than sharing font_banner with the much
+        # more frequent phase banner. Sized once, up front, to the largest point size at which
+        # both strings still fit the panel -- not the same fixed size for both -- so neither reads
+        # bigger than the other purely because it has fewer letters.
+        self.font_end = self._fit_font(
+            ("GAME OVER", "YOU SURVIVED!"), max_width=int(ARENA_WIDTH * 0.82), start_size=150
+        )
 
         self.surface: pygame.Surface | None = None
         self._scanlines: pygame.Surface | None = None
@@ -375,6 +383,18 @@ class ArenaRenderer:
         }
         self._end_meme_kind: str | None = None
         self._end_meme_start: float = 0.0
+
+    @staticmethod
+    def _fit_font(texts: tuple[str, ...], max_width: int, start_size: int, min_size: int = 60) -> pygame.font.Font:
+        """The largest point size, down to `min_size`, at which every string in `texts` still
+        renders no wider than `max_width`. Runs once at construction, not per frame."""
+        size = start_size
+        while size > min_size:
+            font = pygame.font.Font(None, size)
+            if all(font.size(text)[0] <= max_width for text in texts):
+                return font
+            size -= 4
+        return pygame.font.Font(None, min_size)
 
     @staticmethod
     def _load_sprite(path: Path, size: int) -> pygame.Surface:
@@ -1208,8 +1228,36 @@ class ArenaRenderer:
         pygame.draw.rect(surface, COLOR_ACCENT, backdrop, width=2, border_radius=8)
         surface.blit(text, rect)
 
+    #: Height of the dominant end-of-episode panel. `_draw_meme_overlay` reads this back so the
+    #: meme lands below the panel rather than guessing its own margin.
+    END_BANNER_HEIGHT = 220
+
+    def _draw_end_banner(self, surface: pygame.Surface, text_str: str, color: tuple) -> None:
+        """The episode's verdict, drawn as the dominant element on screen: a near-full-width panel
+        with a chunky, drop-shadowed headline in `self.font_end` -- not a small centred pill in a
+        font shared with the much smaller, much more frequent phase banner.
+
+        The drop shadow is the cheap 8-bit "emboss" look: the same text rendered twice, a solid
+        near-black copy offset down-right underneath the coloured one on top, no extra asset
+        needed. The double-line border is the other half of that arcade-cabinet read -- a single
+        thin outline looks like a UI panel, two nested ones look like a machine.
+        """
+        cx = ARENA_WIDTH // 2
+        cy = self.HUD_HEIGHT + ARENA_HEIGHT // 2
+        panel = pygame.Rect(0, 0, int(ARENA_WIDTH * 0.86), self.END_BANNER_HEIGHT)
+        panel.center = (cx, cy)
+        pygame.draw.rect(surface, COLOR_PANEL, panel, border_radius=14)
+        pygame.draw.rect(surface, color, panel, width=5, border_radius=14)
+        pygame.draw.rect(surface, color, panel.inflate(-18, -18), width=2, border_radius=10)
+
+        shadow = self.font_end.render(text_str, True, (18, 18, 22))
+        text = self.font_end.render(text_str, True, color)
+        rect = text.get_rect(center=(cx, cy))
+        surface.blit(shadow, rect.move(6, 6))
+        surface.blit(text, rect)
+
     def _draw_game_over_banner(self, surface: pygame.Surface) -> None:
-        """A centred banner once the player has died, drawn every frame death holds true.
+        """The dominant panel once the player has died, drawn every frame death holds true.
 
         Needs no countdown of its own, unlike the phase banner: `player.alive` stays False for
         the rest of the episode, so the condition that shows this is already latched by the sim.
@@ -1217,15 +1265,10 @@ class ArenaRenderer:
         advance landing on the same frame still resolve with the episode ending outranking the
         episode continuing.
         """
-        text = self.font_banner.render("GAME OVER", True, COLOR_DANGER)
-        rect = text.get_rect(center=(ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2))
-        backdrop = rect.inflate(48, 28)
-        pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
-        pygame.draw.rect(surface, COLOR_DANGER, backdrop, width=2, border_radius=8)
-        surface.blit(text, rect)
+        self._draw_end_banner(surface, "GAME OVER", COLOR_DANGER)
 
     def _draw_victory_banner(self, surface: pygame.Surface) -> None:
-        """A centred banner once the episode ends at the step cap with the player still alive.
+        """The dominant panel once the episode ends at the step cap with the player still alive.
 
         The env has no scripted "final boss" — phases escalate and clamp at the last configured
         one rather than stopping, so there is no in-sim event to mean "you won" the way death means
@@ -1237,12 +1280,7 @@ class ArenaRenderer:
         priority question between the two the way there is between either of them and the phase
         banner.
         """
-        text = self.font_banner.render("YOU SURVIVED!", True, COLOR_VICTORY)
-        rect = text.get_rect(center=(ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2))
-        backdrop = rect.inflate(48, 28)
-        pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
-        pygame.draw.rect(surface, COLOR_VICTORY, backdrop, width=2, border_radius=8)
-        surface.blit(text, rect)
+        self._draw_end_banner(surface, "YOU SURVIVED!", COLOR_VICTORY)
 
     def _draw_meme_overlay(self, surface: pygame.Surface, kind: str) -> None:
         """A bouncing cat meme and a jokey plea for marks, drawn under the game-over/victory
@@ -1257,20 +1295,20 @@ class ArenaRenderer:
         t = self._elapsed - self._end_meme_start
 
         cx = ARENA_WIDTH // 2
-        banner_bottom = self.HUD_HEIGHT + ARENA_HEIGHT // 2 + 40
+        banner_bottom = self.HUD_HEIGHT + ARENA_HEIGHT // 2 + self.END_BANNER_HEIGHT // 2 + 10
         if kind == "lose":
             names = ("lose_kitten", "lose_crying")
             caption = "Even though we lost, please still give us a good grade, Dr. Ginel Dorleon!"
             color = COLOR_DANGER
         else:
             names = ("win_dancing",)
-            caption = "Yayyy we won! Please give us a good grade!"
+            caption = "Yayyy we survived! Please give us a good grade!"
             color = COLOR_VICTORY
 
         bounce = abs(math.sin(t * 4.0)) * 16
         spacing = 150
         start_x = cx - spacing * (len(names) - 1) / 2
-        sprite_y = banner_bottom + 90 - bounce
+        sprite_y = banner_bottom + 70 - bounce
         for index, name in enumerate(names):
             fly_t = min(1.0, max(0.0, t - index * 0.15) / 0.6)
             eased = 1 - (1 - fly_t) ** 3
@@ -1283,7 +1321,7 @@ class ArenaRenderer:
             surface.blit(sprite, sprite.get_rect(center=(round(x), round(sprite_y))))
 
         text = self.font_small.render(caption, True, color)
-        text_rect = text.get_rect(center=(cx, sprite_y + 90))
+        text_rect = text.get_rect(center=(cx, sprite_y + 80))
         backdrop = text_rect.inflate(24, 14)
         pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
         pygame.draw.rect(surface, color, backdrop, width=2, border_radius=8)
@@ -1294,6 +1332,7 @@ class ArenaRenderer:
         if int(t * 2.0) % 2 == 0:
             hint = self.font_small.render("Press R to retry", True, COLOR_TEXT)
             surface.blit(hint, hint.get_rect(center=(cx, text_rect.bottom + 22)))
+
     def _draw_retry_prompt(self, surface: pygame.Surface) -> None:
         """A blinking line under the end-of-episode banner, only while a human is actually being
         asked to press something -- see `show_retry_prompt` on `draw()`.
@@ -1304,7 +1343,8 @@ class ArenaRenderer:
         mid_x, mid_y = ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2
         if int(self._elapsed / 0.6) % 2 == 0:
             prompt = self.font_hud.render("PRESS R TO RETRY   ESC TO QUIT", True, COLOR_TEXT_DIM)
-            surface.blit(prompt, prompt.get_rect(center=(mid_x, mid_y + 70)))
+            below_panel = mid_y + self.END_BANNER_HEIGHT // 2 + 20
+            surface.blit(prompt, prompt.get_rect(center=(mid_x, below_panel)))
 
 
 def _nearest_to(player: Any, candidates: Any) -> Any | None:
