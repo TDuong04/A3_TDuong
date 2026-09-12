@@ -554,13 +554,17 @@ class ArenaRenderer:
             drawn += 1
         return drawn
 
-    def draw_title(self, control_style: str, mechanics: bool = False) -> pygame.Surface:
-        """The attract-mode title screen: no `env` needed, nothing here can be a simulation frame.
+    def begin_retro_frame(self) -> tuple[pygame.Surface, pygame.Rect]:
+        """Start a full-window CRT frame: background, starfield, and the frame clock advanced.
 
-        Uses the same background, starfield, pixelation and bezel as `draw()` so the title screen
-        and the game it leads into read as one machine rather than two. The caller (`eval/
-        play_arena.py`, which already owns every other keypress in this file) decides when to stop
-        calling this and start calling `draw()`; this method only draws one frame and returns.
+        Split out of `draw_title` so any *non-simulation* screen -- the title screen below, and the
+        launcher picker in `eval/launcher.py` -- gets the identical cabinet look from one copy of
+        the code rather than a second hand-rolled pixelation pipeline. Anything the caller draws
+        between this and `finish_retro_frame` is pixelated with the starfield; anything drawn after
+        stays crisp. No `env` is involved at either call site, so nothing here can be a simulation
+        frame.
+
+        Returns the target surface and the rect the retro pass covers.
         """
         surface = self._ensure_surface()
         dt = self._tick()
@@ -571,10 +575,31 @@ class ArenaRenderer:
         # The whole window, not just the game-field sub-rect `draw()` uses: there is no HUD strip
         # or observation panel to reserve space for yet, so leaving them out of the bezel/pixelate
         # pass left the title screen framed on the left with a bare, unbordered black margin on top
-        # and on the right. The title screen owns the full window instead.
+        # and on the right. These screens own the full window instead.
         field = pygame.Rect(0, 0, *self.surface_size)
         pygame.draw.rect(surface, COLOR_FIELD, field)
         self._draw_starfield(surface)
+        return surface, field
+
+    def finish_retro_frame(self, surface: pygame.Surface, field: pygame.Rect) -> None:
+        """Close a `begin_retro_frame` frame: pixelate the field, then lay the bezel over it."""
+        self._pixelate_field(surface, field)
+        self._draw_cabinet_bezel(surface, field)
+
+    def present(self) -> None:
+        """Show the finished frame, unless this renderer is drawing off-screen."""
+        if not self.headless:
+            pygame.display.flip()
+
+    def draw_title(self, control_style: str, mechanics: bool = False) -> pygame.Surface:
+        """The attract-mode title screen: no `env` needed, nothing here can be a simulation frame.
+
+        Uses the same background, starfield, pixelation and bezel as `draw()` so the title screen
+        and the game it leads into read as one machine rather than two. The caller (`eval/
+        play_arena.py`, which already owns every other keypress in this file) decides when to stop
+        calling this and start calling `draw()`; this method only draws one frame and returns.
+        """
+        surface, field = self.begin_retro_frame()
 
         # Drawn before the pixelate pass, not after: the title is part of the "machine" this
         # screen is showing off, not a data readout, so it earns the same chunky arcade treatment
@@ -585,8 +610,7 @@ class ArenaRenderer:
         title = self.font_banner.render("A3 ARENA", True, COLOR_ACCENT)
         surface.blit(title, title.get_rect(center=(mid_x, mid_y - 70)))
 
-        self._pixelate_field(surface, field)
-        self._draw_cabinet_bezel(surface, field)
+        self.finish_retro_frame(surface, field)
 
         mode = "SHIELD + ELITE" if mechanics else "BASELINE"
         subtitle = self.font_hud.render(f"STYLE: {control_style.upper()}   MODE: {mode}", True, COLOR_TEXT)
@@ -598,8 +622,7 @@ class ArenaRenderer:
             prompt = self.font_hud.render("PRESS SPACE TO START", True, COLOR_TEXT_DIM)
             surface.blit(prompt, prompt.get_rect(center=(mid_x, mid_y + 60)))
 
-        if not self.headless:
-            pygame.display.flip()
+        self.present()
         return surface
 
     def close(self) -> None:

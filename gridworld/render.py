@@ -1013,8 +1013,13 @@ class PlaybackApp:
         self.renderer.close()
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """`python -m gridworld.render` opens a human-playable window on the chosen level."""
+def build_parser() -> argparse.ArgumentParser:
+    """The human-play CLI, exposed the way `eval/play_gridworld.py` exposes its own.
+
+    Split out of `main` so a caller that builds this command — `eval/launcher.py` does — can check
+    its argv against the parser that will actually receive it, instead of against a copy of the
+    flags that is free to drift.
+    """
     parser = argparse.ArgumentParser(description="Play the gridworld by hand in a Pygame window.")
     parser.add_argument("--level", type=int, default=0, help=f"level index 0..{N_LEVELS - 1}")
     parser.add_argument("--seed", type=int, default=None, help="seed for monster movement")
@@ -1023,6 +1028,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--frames", type=int, default=None, help="quit after N frames (headless smoke test)"
     )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """`python -m gridworld.render` opens a human-playable window on the chosen level."""
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     if not 0 <= args.level < N_LEVELS:
