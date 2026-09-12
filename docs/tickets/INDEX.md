@@ -14,6 +14,7 @@ raise, update or close a ticket, or edit the ticket file and re-run the script.
 | [A3-017](A3-017-decide-ownership-and-fill-in-the.md) | P1 | chore | Decide ownership and fill in the team table | R | 2.5 | infra | unassigned | [#17](https://github.com/TDuong04/A3_TDuong/issues/17) |
 | [A3-018](A3-018-ship-creativity-features-beyond-the-brief.md) | P1 | feature | Ship creativity features beyond the brief _(blocked by A3-014)_ | Creativity | 5 | arena | unassigned | [#18](https://github.com/TDuong04/A3_TDuong/issues/18) |
 | [A3-032](A3-032-fix-the-low-default-episode-count-that-corrupts.md) | P1 | bug | Fix the low default episode count that corrupts the arena comparison table | I | 4 | eval | unassigned | [#56](https://github.com/TDuong04/A3_TDuong/issues/56) |
+| [A3-033](A3-033-launcher-screen-for-part-i-part-ii-gameplay.md) | P2 | feature | Launcher screen for Part I / Part II gameplay | none | — | eval | unassigned | [#62](https://github.com/TDuong04/A3_TDuong/issues/62) |
 
 ## In progress
 
