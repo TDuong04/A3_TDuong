@@ -505,6 +505,26 @@ def wait_for_start(renderer, style: str, mechanics: bool = False) -> bool:
             return True
 
 
+def wait_for_retry(renderer, env, view) -> bool:
+    """Hold on the end banner until R (retry) or the window closes. Returns False to quit.
+
+    `env` and `view` are the finished episode's own state, unmodified -- this only keeps redrawing
+    the same last frame with the retry prompt added, exactly like `hold()` does without one. Reached
+    only from a real windowed human session; see `play()`, which gates it the same way it gates
+    `wait_for_start`, so no automated or frame-capped run can hang waiting for a key nobody is there
+    to press.
+    """
+    import pygame
+
+    while True:
+        renderer.draw(env, view, show_retry_prompt=True)
+        if renderer.should_close:
+            return False
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_r]:
+            return True
+
+
 # --- the window -------------------------------------------------------------------------------
 
 
@@ -551,7 +571,13 @@ def play(
         if not headless and max_frames is None:
             if not wait_for_start(renderer, style, mechanics=mechanics):
                 raise KeyboardInterrupt
-        for episode in range(episodes):
+        # A real human session replays on R rather than stopping at `episodes`: an arcade "insert
+        # coin" loop reads better than a scripted rep count nobody asked for. Everything else --
+        # agent playback, headless runs, frame-capped report figures -- keeps the fixed-count
+        # behaviour those callers actually rely on.
+        interactive = human and not headless and max_frames is None
+        episode = 0
+        while interactive or episode < episodes:
             obs, _ = env.reset(seed=seed + episode)
             done = False
             info: dict[str, Any] = {}
@@ -596,6 +622,9 @@ def play(
                 renderer.hold(env, view)
             returns.append(float(env.episode_reward))
             phases.append(int(info.get("phase", 1)))
+            episode += 1
+            if interactive and not wait_for_retry(renderer, env, view):
+                break
     except KeyboardInterrupt:
         pass
     finally:

@@ -448,14 +448,17 @@ class ArenaRenderer:
         *,
         debug_snapshot: ArenaDebugSnapshot | None = None,
         policy_status: str = "No model diagnostics supplied",
+        show_retry_prompt: bool = False,
     ) -> pygame.Surface:
         """Render one frame of `env`. Returns the surface, so headless callers can inspect it.
 
         `policy_view` is what the agent's network computed for the observation on screen. It is
         optional because human play and the render tests have no model behind them; when it is
         absent the policy panel is simply not drawn. `debug_snapshot` and `policy_status` feed the
-        F3 debug panel only -- both keyword-only with defaults, so every existing caller of `draw`
-        is unaffected.
+        F3 debug panel only. `show_retry_prompt` draws the "PRESS R TO RETRY" line under the
+        end-of-episode banner; `play_arena.py` sets it only while actually waiting on that key from
+        a human, so an agent playback or headless/report-figure run never shows it. All three are
+        keyword-only with defaults, so every existing caller of `draw` is unaffected.
         """
         self.mechanics_visible = env.mechanics
         surface = self._ensure_surface()
@@ -494,10 +497,17 @@ class ArenaRenderer:
                 image = field_surface.copy()
                 field_surface.fill(COLOR_FIELD)
                 field_surface.blit(image, offset)
-        # Everything drawn into `field` above -- background, stars, sprites, effects, shake -- is
-        # finished now. This is the one place the "game" half of the screen goes through the
-        # retro pipeline; the compass, panels and HUD drawn from here on stay crisp, because a
-        # marker has to read exact values off them.
+        # The end-of-episode banners join the retro pipeline here, not after it: unlike the HUD's
+        # numbers, nobody has to read an exact value off "GAME OVER", so it gets the same chunky
+        # arcade treatment as the ship and the starfield rather than sitting crisp on top of them.
+        if not env.player.alive:
+            self._draw_game_over_banner(surface)
+        elif env.steps >= env.max_episode_steps:
+            self._draw_victory_banner(surface)
+        # Everything drawn into `field` above -- background, stars, sprites, effects, shake,
+        # end banners -- is finished now. This is the one place the "game" half of the screen goes
+        # through the retro pipeline; the compass, panels and HUD drawn from here on stay crisp,
+        # because a marker has to read exact values off them.
         self._pixelate_field(surface, field)
         self._draw_cabinet_bezel(surface, field)
         if self.show_observation_overlay:
@@ -508,12 +518,13 @@ class ArenaRenderer:
             self._draw_debug_panel(surface, env, policy_view, debug_snapshot, policy_status)
             self._draw_physics(surface, env)
         self._draw_hud(surface, env, policy_view)
-        if self._banner_remaining > 0.0:
+        # The end banner already won this frame above; skip the phase banner so a phase advance
+        # landing on the same step the episode ends can't render on top of it -- the episode
+        # ending still outranks the episode continuing, just via a condition now, not draw order.
+        if self._banner_remaining > 0.0 and env.player.alive and env.steps < env.max_episode_steps:
             self._draw_phase_banner(surface)
-        if not env.player.alive:
-            self._draw_game_over_banner(surface)
-        elif env.steps >= env.max_episode_steps:
-            self._draw_victory_banner(surface)
+        if show_retry_prompt:
+            self._draw_retry_prompt(surface)
 
         if not self.headless:
             pygame.display.flip()
@@ -543,6 +554,43 @@ class ArenaRenderer:
             drawn += 1
         return drawn
 
+    def begin_retro_frame(self) -> tuple[pygame.Surface, pygame.Rect]:
+        """Start a full-window CRT frame: background, starfield, and the frame clock advanced.
+
+        Split out of `draw_title` so any *non-simulation* screen -- the title screen below, and the
+        launcher picker in `eval/launcher.py` -- gets the identical cabinet look from one copy of
+        the code rather than a second hand-rolled pixelation pipeline. Anything the caller draws
+        between this and `finish_retro_frame` is pixelated with the starfield; anything drawn after
+        stays crisp. No `env` is involved at either call site, so nothing here can be a simulation
+        frame.
+
+        Returns the target surface and the rect the retro pass covers.
+        """
+        surface = self._ensure_surface()
+        dt = self._tick()
+        self._pump_events()
+        self._elapsed += dt
+
+        surface.fill(COLOR_BACKGROUND)
+        # The whole window, not just the game-field sub-rect `draw()` uses: there is no HUD strip
+        # or observation panel to reserve space for yet, so leaving them out of the bezel/pixelate
+        # pass left the title screen framed on the left with a bare, unbordered black margin on top
+        # and on the right. These screens own the full window instead.
+        field = pygame.Rect(0, 0, *self.surface_size)
+        pygame.draw.rect(surface, COLOR_FIELD, field)
+        self._draw_starfield(surface)
+        return surface, field
+
+    def finish_retro_frame(self, surface: pygame.Surface, field: pygame.Rect) -> None:
+        """Close a `begin_retro_frame` frame: pixelate the field, then lay the bezel over it."""
+        self._pixelate_field(surface, field)
+        self._draw_cabinet_bezel(surface, field)
+
+    def present(self) -> None:
+        """Show the finished frame, unless this renderer is drawing off-screen."""
+        if not self.headless:
+            pygame.display.flip()
+
     def draw_title(self, control_style: str, mechanics: bool = False) -> pygame.Surface:
         """The attract-mode title screen: no `env` needed, nothing here can be a simulation frame.
 
@@ -551,21 +599,18 @@ class ArenaRenderer:
         play_arena.py`, which already owns every other keypress in this file) decides when to stop
         calling this and start calling `draw()`; this method only draws one frame and returns.
         """
-        surface = self._ensure_surface()
-        dt = self._tick()
-        self._pump_events()
-        self._elapsed += dt
+        surface, field = self.begin_retro_frame()
 
-        surface.fill(COLOR_BACKGROUND)
-        field = pygame.Rect(0, self.HUD_HEIGHT, ARENA_WIDTH, ARENA_HEIGHT)
-        pygame.draw.rect(surface, COLOR_FIELD, field)
-        self._draw_starfield(surface)
-        self._pixelate_field(surface, field)
-        self._draw_cabinet_bezel(surface, field)
-
-        mid_x, mid_y = ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2
+        # Drawn before the pixelate pass, not after: the title is part of the "machine" this
+        # screen is showing off, not a data readout, so it earns the same chunky arcade treatment
+        # as the starfield behind it rather than sitting crisp on top. The smaller lines below stay
+        # off this pass, the same reason the HUD does -- at this font size the downscale round trip
+        # blurs letterforms instead of chunking them, so it costs legibility without adding style.
+        mid_x, mid_y = self.surface_size[0] // 2, self.surface_size[1] // 2
         title = self.font_banner.render("A3 ARENA", True, COLOR_ACCENT)
         surface.blit(title, title.get_rect(center=(mid_x, mid_y - 70)))
+
+        self.finish_retro_frame(surface, field)
 
         mode = "SHIELD + ELITE" if mechanics else "BASELINE"
         subtitle = self.font_hud.render(f"STYLE: {control_style.upper()}   MODE: {mode}", True, COLOR_TEXT)
@@ -577,8 +622,7 @@ class ArenaRenderer:
             prompt = self.font_hud.render("PRESS SPACE TO START", True, COLOR_TEXT_DIM)
             surface.blit(prompt, prompt.get_rect(center=(mid_x, mid_y + 60)))
 
-        if not self.headless:
-            pygame.display.flip()
+        self.present()
         return surface
 
     def close(self) -> None:
@@ -1153,8 +1197,9 @@ class ArenaRenderer:
 
         Needs no countdown of its own, unlike the phase banner: `player.alive` stays False for
         the rest of the episode, so the condition that shows this is already latched by the sim.
-        Drawn after the phase banner so it wins the rare frame where a kill and a phase advance
-        land together — the episode ending outranks the episode continuing.
+        `draw()` skips the phase banner whenever this one is showing, so a kill and a phase
+        advance landing on the same frame still resolve with the episode ending outranking the
+        episode continuing.
         """
         text = self.font_banner.render("GAME OVER", True, COLOR_DANGER)
         rect = text.get_rect(center=(ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2))
@@ -1182,6 +1227,18 @@ class ArenaRenderer:
         pygame.draw.rect(surface, COLOR_PANEL, backdrop, border_radius=8)
         pygame.draw.rect(surface, COLOR_VICTORY, backdrop, width=2, border_radius=8)
         surface.blit(text, rect)
+
+    def _draw_retry_prompt(self, surface: pygame.Surface) -> None:
+        """A blinking line under the end-of-episode banner, only while a human is actually being
+        asked to press something -- see `show_retry_prompt` on `draw()`.
+
+        Crisp, not pixelated, for the same reason the title screen's own prompt is: at this font
+        size the downscale round trip blurs letterforms rather than chunking them.
+        """
+        mid_x, mid_y = ARENA_WIDTH // 2, self.HUD_HEIGHT + ARENA_HEIGHT // 2
+        if int(self._elapsed / 0.6) % 2 == 0:
+            prompt = self.font_hud.render("PRESS R TO RETRY   ESC TO QUIT", True, COLOR_TEXT_DIM)
+            surface.blit(prompt, prompt.get_rect(center=(mid_x, mid_y + 70)))
 
 
 def _nearest_to(player: Any, candidates: Any) -> Any | None:

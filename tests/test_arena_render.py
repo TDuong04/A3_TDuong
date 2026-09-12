@@ -335,6 +335,34 @@ def test_the_game_over_banner_shows_on_death_but_not_on_survival(env, renderer):
     assert "GAME OVER" in renderer.font_banner.drawn, "should not need a per-frame trigger"
 
 
+def test_the_retry_prompt_only_shows_when_asked(env, renderer):
+    """`show_retry_prompt` is off by default -- an agent playback or a headless/report-figure run
+    must never draw a prompt aimed at a human who isn't there."""
+    env.player.kill()
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer.draw(env)
+    assert "PRESS R TO RETRY   ESC TO QUIT" not in renderer.font_hud.drawn
+
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer.draw(env, show_retry_prompt=True)
+    assert "PRESS R TO RETRY   ESC TO QUIT" in renderer.font_hud.drawn
+
+
+def test_the_retry_prompt_blinks_rather_than_staying_lit(env, renderer):
+    env.player.kill()
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer._elapsed = 0.0
+    renderer.draw(env, show_retry_prompt=True)
+    lit = "PRESS R TO RETRY   ESC TO QUIT" in renderer.font_hud.drawn
+
+    renderer.font_hud = RecordingFont(renderer.font_hud)
+    renderer._elapsed = 0.6  # one full blink period on from the first draw
+    renderer.draw(env, show_retry_prompt=True)
+    unlit = "PRESS R TO RETRY   ESC TO QUIT" in renderer.font_hud.drawn
+
+    assert lit != unlit, "the prompt should not be in the same on/off state one period later"
+
+
 def test_phase_banner_latches_for_its_own_countdown(env, renderer):
     """`phase_just_advanced` is true for one step; the banner must outlive it on screen."""
     for spawner in env.spawners:
