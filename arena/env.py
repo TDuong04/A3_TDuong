@@ -85,8 +85,15 @@ from .constants import (
 )
 from .debug import REWARD_TERMS, RewardSnapshot
 from .entities import Bullet, Enemy, Player, Spawner, phase_config
-from .observation import build_observation, describe, mechanic_observation, observation_scales
 from .mechanics import EliteCharger, MechanicsConfig, ShieldPickup
+from .observation import (
+    build_observation,
+    describe,
+    mechanic_observation,
+    nearest_alive,
+    observation_scales,
+    to_ship_local,
+)
 
 
 @dataclass(frozen=True)
@@ -107,6 +114,46 @@ class EpisodeConfig:
 @lru_cache(maxsize=None)
 def episode_config() -> EpisodeConfig:
     return EpisodeConfig.from_yaml()
+
+
+@dataclass(frozen=True)
+class ShapingConfig:
+    """The `shaping` block of `config/arena.yaml` -- the reward terms beyond the brief's fixed
+    list in `arena/constants.py`.
+
+    Both potential-based only (`F = gamma * phi(s') - phi(s)`, Ng, Harada & Russell 1999): a term
+    of this shape leaves the optimal policy provably unchanged for any strength, which is what lets
+    it sit alongside the frozen list instead of silently redefining "the best policy". Wiring a
+    strength number as a literal in `env.py` would be exactly the thing rule 2 forbids, so both
+    read from config like every other tunable. `gamma` mirrors `training.gamma` so shaping
+    discounts on the same horizon PPO does rather than a second, disagreeing one.
+
+    `aim_strength` alone measurably improved hit rate but just as measurably cut survival (a 3-seed
+    comparison at 0.01: hit rate 12.8%->16.8%, survival 20%->~8% mean) -- rewarding "point at the
+    nearest enemy" gives no reason not to also close distance with it, and PPO found that reason on
+    its own. `safety_strength` is the deliberate counterweight: same nearest enemy, but on
+    *distance* instead of *angle*, so "track it" and "don't close in on it" are rewarded
+    independently rather than trading off against each other in one term.
+    """
+
+    aim_strength: float
+    safety_strength: float
+    gamma: float
+
+    @classmethod
+    def from_yaml(cls, name: str = "arena") -> ShapingConfig:
+        data = load_yaml(name)
+        shaping = data["shaping"]
+        return cls(
+            aim_strength=float(shaping["aim_strength"]),
+            safety_strength=float(shaping["safety_strength"]),
+            gamma=float(data["training"]["gamma"]),
+        )
+
+
+@lru_cache(maxsize=None)
+def shaping_config() -> ShapingConfig:
+    return ShapingConfig.from_yaml()
 
 
 class ArenaEnv(gym.Env):
@@ -141,6 +188,7 @@ class ArenaEnv(gym.Env):
             max_episode_steps if max_episode_steps is not None else MAX_EPISODE_STEPS
         )
         self.episode_config = episode_config()
+        self.shaping = shaping_config()
 
         self.action_space = spaces.Discrete(N_ACTIONS[control_style])
         self.observation_space = spaces.Box(
@@ -165,6 +213,12 @@ class ArenaEnv(gym.Env):
         self.phase = 1  # 1-based: `info["phase"] == 1` during the first phase, as the HUD shows it
         self.enemies_killed = 0
         self.spawners_destroyed = 0
+        # Aim-quality instrumentation for the arena sweep's rotation-vs-direct hit-rate
+        # comparison (A3-013 follow-up): counted here rather than derived from reward,
+        # because a bullet that expires unfired is a miss and the reward term does not
+        # distinguish a miss from a bullet still in flight.
+        self.bullets_fired = 0
+        self.bullets_hit = 0
         self.damage_taken = 0
         self.pickups_collected = 0
         self.elites_killed = 0
@@ -204,6 +258,8 @@ class ArenaEnv(gym.Env):
 
         self._step_rewards = dict.fromkeys(REWARD_TERMS, 0.0)
         reward = self._record_reward("step", REWARD_PER_STEP)
+        aim_before = self._aim_potential()
+        safety_before = self._safety_potential()
         for _ in range(ACTION_REPEAT):
             reward += self._advance_frame(action)
             if not self.player.alive:
@@ -214,6 +270,19 @@ class ArenaEnv(gym.Env):
         # Distinct by construction: a step cap is not a rule of the game, and an agent that is
         # still alive when the clock runs out must keep bootstrapping from its final value.
         truncated = not terminated and self.steps >= self.max_episode_steps
+        # One shaping term per *agent* step, matching REWARD_PER_STEP -- the MDP transition PPO
+        # actually sees is (obs before this step, obs after ACTION_REPEAT frames), so phi is
+        # evaluated at those two points, not once per physics frame. Two independent terms, not
+        # one: aim rewards angle, safety rewards range, deliberately uncoupled (see ShapingConfig).
+        self._record_reward(
+            "aim_shaping",
+            self.shaping.aim_strength * (self.shaping.gamma * self._aim_potential() - aim_before),
+        )
+        self._record_reward(
+            "safety_shaping",
+            self.shaping.safety_strength
+            * (self.shaping.gamma * self._safety_potential() - safety_before),
+        )
         # Canonical sum of the actual contributions captured at each reward site, so a site that
         # forgets to route through `_record_reward` is silently dropped rather than
         # double-counted -- the quieter of the two failure modes, and why the mutation test on
@@ -382,6 +451,7 @@ class ArenaEnv(gym.Env):
         bullet = self.player.shoot(live_bullets=len(self.bullets))
         if bullet is not None:
             self.bullets.append(bullet)
+            self.bullets_fired += 1
 
     def _advance_spawners(self) -> None:
         for spawner in self.spawners:
@@ -399,6 +469,56 @@ class ArenaEnv(gym.Env):
         """Record a fired reward at its source; drawing never calls this method."""
         self._step_rewards[term] += value
         return value
+
+    def _aim_potential(self) -> float:
+        """`phi(s)` for the optional aim-alignment shaping term (`ShapingConfig`): the cosine of
+        the angle between the ship's heading and the direction to the *lead point* -- where the
+        nearest living enemy will be when a bullet fired this instant would reach it -- rather than
+        its current position, in the same ship-local frame `observation.py` uses. +1.0 is pointed
+        straight at the lead point, -1.0 pointed straight away, 0.0 when no enemy is alive or the
+        ship itself is not -- `phi(terminal) = 0` is what keeps potential-based shaping from paying
+        out across a death.
+
+        Using the raw current position here taught exactly the miss it was meant to fix: PPO was
+        rewarded for pointing at where the enemy *was*, so a converged policy had no incentive to
+        lead a moving target at all. `_lead_offset` solves the intercept time against the enemy's
+        instantaneous velocity (linear extrapolation, matching how `Enemy.update` itself only ever
+        commits to one frame of heading); still a pure function of `s`, so the term stays
+        potential-based and the optimal-policy-invariance argument is untouched.
+        """
+        if not self.player.alive:
+            return 0.0
+        enemy = nearest_alive(self.player, [e for e in self.enemies if e.alive])
+        if enemy is None:
+            return 0.0
+        dx, dy = enemy.x - self.player.x, enemy.y - self.player.y
+        rvx, rvy = enemy.vx - self.player.vx, enemy.vy - self.player.vy
+        lead_x, lead_y = _lead_offset(dx, dy, rvx, rvy, self.player.config.bullet_speed)
+        distance = math.hypot(lead_x, lead_y)
+        if distance <= 1e-6:
+            return 1.0  # standing on top of the lead point: no meaningful angle, treat as aligned
+        local_x, _ = to_ship_local(self.player.heading, lead_x, lead_y)
+        return local_x / distance
+
+    def _safety_potential(self) -> float:
+        """`phi(s)` for the optional distance-keeping shaping term (`ShapingConfig`): distance to
+        the same nearest living enemy `_aim_potential` tracks, scaled to [0, 1] by the arena
+        diagonal. 1.0 is as far apart as the arena allows, 0.0 is touching. No enemy alive scores
+        1.0 too -- nothing is closing on the ship, which is the same "as safe as maximally far
+        away" a very distant enemy already approaches continuously. `phi(terminal) = 0`, same
+        convention and same reason as `_aim_potential`.
+
+        Deliberately independent of `_aim_potential`: that term is about angle, this one is about
+        range, so "stay pointed at it" and "don't close the distance" are two separate incentives
+        rather than one term quietly trading them against each other.
+        """
+        if not self.player.alive:
+            return 0.0
+        enemy = nearest_alive(self.player, [e for e in self.enemies if e.alive])
+        if enemy is None:
+            return 1.0
+        distance = math.hypot(enemy.x - self.player.x, enemy.y - self.player.y)
+        return min(1.0, distance / observation_scales().diagonal)
 
     def _advance_pickups(self) -> None:
         for pickup in self.pickups:
@@ -418,6 +538,7 @@ class ArenaEnv(gym.Env):
             for enemy in self.enemies:
                 if bullet.collides_with(enemy):
                     bullet.kill()
+                    self.bullets_hit += 1
                     enemy.take_damage(bullet.damage)
                     if not enemy.alive:
                         self.enemies_killed += 1
@@ -430,6 +551,7 @@ class ArenaEnv(gym.Env):
             for spawner in self.spawners:
                 if bullet.collides_with(spawner):
                     bullet.kill()
+                    self.bullets_hit += 1
                     spawner.take_damage(bullet.damage)
                     if not spawner.alive:
                         self.spawners_destroyed += 1
@@ -506,6 +628,8 @@ class ArenaEnv(gym.Env):
             "phase": self.phase,
             "spawners_destroyed": self.spawners_destroyed,
             "enemies_killed": self.enemies_killed,
+            "bullets_fired": self.bullets_fired,
+            "bullets_hit": self.bullets_hit,
             "damage_taken": self.damage_taken,
             # Death, as opposed to the step cap. The two endings mean opposite things about a
             # policy, and the reward curve cannot tell them apart; `behaviour/survival_rate` is
@@ -521,3 +645,36 @@ class ArenaEnv(gym.Env):
             f"ArenaEnv(control_style={self.control_style!r}, phase={self.phase}, "
             f"step={self.steps}/{self.max_episode_steps})"
         )
+
+
+def _lead_offset(
+    dx: float, dy: float, rvx: float, rvy: float, bullet_speed: float
+) -> tuple[float, float]:
+    """The firing-solution offset to a target at relative position `(dx, dy)` moving at relative
+    velocity `(rvx, rvy)`, for a bullet travelling at `bullet_speed`.
+
+    Solves `|(dx, dy) + (rvx, rvy) * t| == bullet_speed * t` for the smallest positive intercept
+    time `t` -- a quadratic in `t` -- and returns the target's extrapolated offset at that time.
+    Falls back to the current offset (`t = 0`) when no positive root exists: the target and the
+    ship are already colocated, or the target is outrunning what the bullet could ever catch, and
+    "aim at where it is" is the only sensible fallback in that case anyway.
+    """
+    a = rvx * rvx + rvy * rvy - bullet_speed * bullet_speed
+    b = 2.0 * (dx * rvx + dy * rvy)
+    c = dx * dx + dy * dy
+
+    t = 0.0
+    if abs(a) > 1e-9:
+        discriminant = b * b - 4.0 * a * c
+        if discriminant >= 0.0:
+            sqrt_discriminant = math.sqrt(discriminant)
+            roots = ((-b + sqrt_discriminant) / (2.0 * a), (-b - sqrt_discriminant) / (2.0 * a))
+            candidates = [root for root in roots if root > 0.0]
+            if candidates:
+                t = min(candidates)
+    elif abs(b) > 1e-9:
+        candidate = -c / b
+        if candidate > 0.0:
+            t = candidate
+
+    return dx + rvx * t, dy + rvy * t

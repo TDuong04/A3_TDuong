@@ -13,6 +13,55 @@ training:
   net_arch: [64, 64]      # rubric J2 requires at least one hidden layer
   seed: 0
 
+# The two reward terms beyond the brief's fixed list in arena/constants.py, and the brief's own
+# escape hatch for them: "optional shaping rewards must be justified." Both potential-based only
+# (F = gamma * phi(s') - phi(s), see arena/env.py's ShapingConfig), so they leave the optimal
+# policy provably unchanged regardless of the strengths below -- justify the choice to use them at
+# all in the report, not the magnitude. Both at 0.0 disables shaping outright and falls back to
+# exactly the brief's reward list.
+#
+# aim_strength alone (0.01) was tried first: a 3-seed comparison against the un-shaped baseline
+# (rotation style, 400k steps each) raised mean hit-rate 12.8% -> 16.8%, but cut mean survival
+# 20% -> ~8%. Rewarding "point at the nearest enemy" gave no reason not to also close distance with
+# it, and PPO found that reason on its own. safety_strength is the deliberate counterweight: same
+# nearest enemy, but on distance instead of angle, so tracking it and not closing on it are two
+# separate incentives instead of one term trading them against each other.
+#
+# Checked-in default is OFF (both 0.0): this falls back to exactly the brief's reward list, which
+# is what `direct` ships trained under -- see below. `rotation`'s shipped model overrides both via
+# `--aim-strength`/`--safety-strength` at train time, the same per-style-override convention
+# `--seed` already uses (direct is shipped from seed 1, rotation from seed 0; neither is the
+# checked-in `training.seed` default either).
+#
+# Why the two styles differ: rotation started with a real aiming problem (12.8% hit rate vs
+# direct's 17.3%) that this shaping was built to fix. direct did not have that problem, and a 2x2
+# grid confirmed it does not tolerate the same medicine -- every combination tried, down to
+# aim=0.0025/safety=0.01, cut its survival from the baseline's 53% to single digits, because
+# `direct`'s heading always equals its movement direction, so an "aim at the enemy" incentive is
+# inseparable from a "move toward the enemy" incentive in a way it never is for rotation, which can
+# thrust and turn independently. direct ships unshaped; only rotation uses this feature.
+#
+# rotation's values are the outcome of a 2x3 joint grid (aim in {0.005, 0.01}, safety in
+# {0.01, 0.02, 0.04}, 400k steps), with the top two candidates confirmed on 3 seeds each (mean over
+# 30 deterministic episodes per seed):
+#
+#   config              survival   hit-rate   return   phase   cleared
+#   baseline (0, 0)       20.0%      12.8%     7.55     1.93    28/30
+#   aim=.005 safety=.01   16.7%      15.1%     9.52     1.99   26.7/30
+#   aim=.005 safety=.02   21.1%      13.0%     8.95     1.98   28.7/30   <- shipped (rotation only)
+#
+# aim=.005/safety=.01 pushes hit-rate further but its survival mean sits *below* baseline (one
+# seed got lucky at 23%; the other two did not) -- it does not reliably deliver the "increase
+# survival" half of the goal. aim=.005/safety=.02 is the only candidate that beat the un-shaped
+# baseline on every one of survival, hit-rate, return, phase and clears, consistently across all 3
+# seeds, which is why it is the one shipped despite the smaller hit-rate gain. Strengths of 0.05
+# and above on aim_strength alone were rejected outright in the earlier single-term search: the
+# agent stopped firing almost entirely (fired/episode collapsed from ~140 to ~1-4), farming the
+# shaping term by orbiting a target without ever engaging it.
+shaping:
+  aim_strength: 0.0      # coefficient on gamma*phi(s')-phi(s); phi = cosine alignment to the nearest enemy
+  safety_strength: 0.0   # coefficient on gamma*phi(s')-phi(s); phi = distance/diagonal to the nearest enemy
+
 # Reduced-budget sweep for rubric J3 and report row R5. One axis varied at a time from the
 # baseline; winner re-run on 3 seeds before being trusted.
 sweep:

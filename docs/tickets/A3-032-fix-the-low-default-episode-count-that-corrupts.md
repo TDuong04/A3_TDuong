@@ -12,7 +12,7 @@ owner: unassigned
 blocks: []
 blocked_by: []
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-09-12
 ---
 
 # A3-032 — Fix the low default episode count that corrupts the arena comparison table
@@ -90,3 +90,9 @@ in-progress 3-episode one.
   (`docs/evaluations/2026-09-10-solution-evaluation.md:317-321`). Left open: not this agent's to fix,
   and out of scope for A3-031.
 - mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/56
+- 2026-09-12 — Cross-reference only, no field changes: a second, distinct defect on this same
+  evidence file was found and filed as **A3-035** (arena evaluation is not run-to-run reproducible
+  even when `--episodes 30 --seed 0` is given explicitly, so this ticket's episode-count fix is
+  necessary but not sufficient to make `comparison.md` trustworthy). Not merged into this ticket
+  because the fix surface is unrelated (an argparse default here vs. a policy-evaluation
+  reproducibility gap there) and fixing one does not fix the other.

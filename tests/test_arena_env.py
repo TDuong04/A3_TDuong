@@ -40,9 +40,10 @@ from arena.constants import (
     DirectAction,
     RotationAction,
 )
-from arena.entities import Enemy, Player, Spawner, phase_config, player_config
+from arena.entities import Enemy, Player, Spawner, player_config
 from arena.env import ArenaEnv, episode_config
 from arena.legacy_api import LegacyGymAPI
+from arena.observation import to_ship_local
 from common.config import load_yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +76,11 @@ def park_spawners(env: ArenaEnv) -> None:
 def quiet_env(control_style: str = "rotation", seed: int = 1, **kwargs) -> ArenaEnv:
     env = ArenaEnv(control_style=control_style, seed=seed, **kwargs)
     park_spawners(env)
+    # This file asserts reward as an exact sum of the frozen constants in `constants.py`. The
+    # optional shaping terms (`ShapingConfig`) are config-driven and, unlike those, vary with the
+    # ship's own aim and range every step -- exercised on their own in `TestAimShaping` and
+    # `TestSafetyShaping` instead of smuggled into every other assertion here.
+    env.shaping = replace(env.shaping, aim_strength=0.0, safety_strength=0.0)
     return env
 
 
@@ -497,6 +503,152 @@ class TestRewards:
             total += reward
             steps += 1
         assert total == pytest.approx(steps * REWARD_PER_STEP + 7.5 + 21.0)
+
+
+class TestAimShaping:
+    """`ShapingConfig`'s potential-based aim term: `F = gamma * phi(s') - phi(s)`.
+
+    The frozen-constant reward tests above all run with `aim_strength` forced to 0.0 (see
+    `quiet_env`); these turn it on deliberately and check the shape of the term itself rather than
+    any particular trained behaviour.
+    """
+
+    def test_config_loads_a_valid_strength(self):
+        """Not a claim about what the value should be -- that's `config/arena.yaml`'s call,
+        justified there and in the report -- just that shaping_config() reads a real, finite
+        number rather than silently defaulting to something `from_yaml` never actually returned."""
+        from arena.env import shaping_config
+
+        assert shaping_config().aim_strength >= 0.0
+
+    def test_is_zero_with_no_enemy_alive(self):
+        env = quiet_env("rotation")
+        env.shaping = replace(env.shaping, aim_strength=0.05)
+        assert not env.enemies
+        _obs, reward, *_ = env.step(RotationAction.NOOP)
+        assert reward == pytest.approx(REWARD_PER_STEP)
+
+    def test_rewards_turning_to_face_an_enemy_and_penalises_turning_away(self):
+        """Place an enemy 90 degrees off the nose. Turning toward it must earn strictly more
+        shaping reward over the same number of steps than turning away, with everything else
+        about the two runs -- seed, enemy, spawners -- identical."""
+
+        def run(action) -> float:
+            env = quiet_env("rotation")
+            env.shaping = replace(env.shaping, aim_strength=0.05)
+            # +90 degrees off the nose: heading increases toward it (`_wrap_angle(heading + spin *
+            # rate * dt)`, spin=+1 for ROTATE_RIGHT), so ROTATE_RIGHT is "toward" here and
+            # ROTATE_LEFT is "away" -- not a universal convention, just this placement's.
+            perp = env.player.heading + math.pi / 2.0
+            ex = env.player.x + math.cos(perp) * 300.0
+            ey = env.player.y + math.sin(perp) * 300.0
+            env.enemies = [Enemy.from_phase(ex, ey, env.phase_settings)]
+            env.enemies[0].speed = 0.0  # hold still so only the ship's own turning matters
+            total_shaping = 0.0
+            for _ in range(5):
+                env.step(action)
+                total_shaping += dict(env.latest_reward.contributions)["aim_shaping"]
+            return total_shaping
+
+        toward = run(RotationAction.ROTATE_RIGHT)
+        away = run(RotationAction.ROTATE_LEFT)
+        assert toward > away
+
+    def test_matches_the_potential_based_formula_for_one_step(self):
+        """Direct correctness check: the recorded contribution for one step must equal
+        `strength * (gamma * phi(s') - phi(s))`, with phi computed independently here from the
+        player's heading and the enemy's position rather than by calling `_aim_potential`."""
+
+        def phi(env: ArenaEnv) -> float:
+            enemy = env.enemies[0]
+            dx, dy = enemy.x - env.player.x, enemy.y - env.player.y
+            local_x, _ = to_ship_local(env.player.heading, dx, dy)
+            return local_x / math.hypot(dx, dy)
+
+        env = quiet_env("rotation")
+        env.shaping = replace(env.shaping, aim_strength=0.05)
+        perp = env.player.heading + math.pi / 2.0
+        ex = env.player.x + math.cos(perp) * 300.0
+        ey = env.player.y + math.sin(perp) * 300.0
+        env.enemies = [Enemy.from_phase(ex, ey, env.phase_settings)]
+        env.enemies[0].speed = 0.0
+
+        phi_before = phi(env)
+        env.step(RotationAction.ROTATE_LEFT)
+        phi_after = phi(env)
+
+        expected = env.shaping.aim_strength * (env.shaping.gamma * phi_after - phi_before)
+        actual = dict(env.latest_reward.contributions)["aim_shaping"]
+        assert actual == pytest.approx(expected, abs=1e-9)
+
+
+class TestSafetyShaping:
+    """`ShapingConfig`'s potential-based range term: same nearest enemy as `TestAimShaping`, but on
+    distance instead of angle, and deliberately independent of it -- see `ShapingConfig`'s
+    docstring for why the two are kept separate rather than combined into one term."""
+
+    def test_is_a_small_constant_with_no_enemy_alive_not_zero(self):
+        """Unlike `_aim_potential` (phi=0 with no enemy, so a still-empty arena contributes
+        exactly nothing), `_safety_potential` reads phi=1.0 with no enemy -- "as safe as maximally
+        far away". A *constant* nonzero potential still isn't free under discounting: it pays
+        `strength * (gamma - 1) * phi` every step, a small structural cost of gamma < 1, not a
+        bug. This checks the env matches that formula exactly, not that the term vanishes."""
+        env = quiet_env("rotation")
+        env.shaping = replace(env.shaping, safety_strength=0.05)
+        assert not env.enemies
+        _obs, reward, *_ = env.step(RotationAction.NOOP)
+        expected_shaping = env.shaping.safety_strength * (env.shaping.gamma - 1.0) * 1.0
+        assert reward == pytest.approx(REWARD_PER_STEP + expected_shaping)
+
+    def test_rewards_increasing_distance_and_penalises_closing_in(self):
+        """An enemy dead ahead. Thrusting forward (closing in) must earn strictly less shaping
+        reward than thrusting the opposite way (opening the range), all else identical."""
+
+        def run(rotate_first: bool) -> float:
+            env = quiet_env("rotation")
+            env.shaping = replace(env.shaping, safety_strength=0.05)
+            ex, ey = ahead_of(env, 300.0)
+            env.enemies = [Enemy.from_phase(ex, ey, env.phase_settings)]
+            env.enemies[0].speed = 0.0
+            if rotate_first:
+                # Face the opposite way first so "thrust" opens the range instead of closing it;
+                # a full about-turn well within the 5 steps this test then spends thrusting.
+                for _ in range(20):
+                    env.step(RotationAction.ROTATE_LEFT)
+            total_shaping = 0.0
+            for _ in range(5):
+                env.step(RotationAction.THRUST)
+                total_shaping += dict(env.latest_reward.contributions)["safety_shaping"]
+            return total_shaping
+
+        opening_range = run(rotate_first=True)
+        closing_in = run(rotate_first=False)
+        assert opening_range > closing_in
+
+    def test_matches_the_potential_based_formula_for_one_step(self):
+        """Direct correctness check: the recorded contribution for one step must equal
+        `strength * (gamma * phi(s') - phi(s))`, with phi computed independently here from the
+        player's and enemy's positions rather than by calling `_safety_potential`."""
+        from arena.observation import observation_scales
+
+        def phi(env: ArenaEnv) -> float:
+            enemy = env.enemies[0]
+            distance = math.hypot(enemy.x - env.player.x, enemy.y - env.player.y)
+            return min(1.0, distance / observation_scales().diagonal)
+
+        env = quiet_env("rotation")
+        env.shaping = replace(env.shaping, safety_strength=0.05)
+        ex, ey = ahead_of(env, 300.0)
+        env.enemies = [Enemy.from_phase(ex, ey, env.phase_settings)]
+        env.enemies[0].speed = 0.0
+
+        phi_before = phi(env)
+        env.step(RotationAction.THRUST)
+        phi_after = phi(env)
+
+        expected = env.shaping.safety_strength * (env.shaping.gamma * phi_after - phi_before)
+        actual = dict(env.latest_reward.contributions)["safety_shaping"]
+        assert actual == pytest.approx(expected, abs=1e-9)
 
 
 # --- the phase system -----------------------------------------------------------------------------

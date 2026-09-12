@@ -14,6 +14,9 @@
   "phase_cleared_episodes": 0,
   "spawners_mean": 0.03333333333333333,
   "enemies_mean": 1.9,
+  "bullets_fired_mean": 25.033333333333335,
+  "bullets_hit_mean": 2.6333333333333333,
+  "hit_rate": 0.1051930758988016,
   "steps_mean": 241.76666666666668,
   "survival_rate": 0.0,
   "returns": [
@@ -80,5 +83,5 @@
     1,
     1
   ],
-  "generated": "2026-09-11T17:26:46+00:00"
+  "generated": "2026-09-12T09:18:48+00:00"
 }

@@ -15,6 +15,8 @@ import os
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
+from dataclasses import replace
+
 import numpy as np
 import pygame
 import pytest
@@ -42,6 +44,11 @@ def check_accounting(env: ArenaEnv, returned: float) -> dict[str, float]:
 @pytest.mark.parametrize("style", C.CONTROL_STYLES)
 def test_actual_enemy_spawner_phase_and_step_rewards(style):
     env = ArenaEnv(style, seed=0)
+    # This test asserts reward as an exact sum of the frozen constants in `constants.py`; the
+    # optional shaping terms are exercised on their own in `TestAimShaping`/`TestSafetyShaping`
+    # (test_arena_env.py) instead of smuggled in here via whatever config/arena.yaml's current
+    # defaults happen to be.
+    env.shaping = replace(env.shaping, aim_strength=0.0, safety_strength=0.0)
     env.enemies = [Enemy(100, 100, health=1, speed=0)]
     env.spawners = [Spawner(700, 500, env.phase_settings)]
     env.spawners[0].health = 1
@@ -53,7 +60,7 @@ def test_actual_enemy_spawner_phase_and_step_rewards(style):
     terms = check_accounting(env, reward)
     assert terms == dict(step=C.REWARD_PER_STEP, enemy=C.REWARD_ENEMY_DESTROYED,
                          spawner=C.REWARD_SPAWNER_DESTROYED, phase=C.REWARD_PHASE_ADVANCE,
-                         damage=0, death=0)
+                         damage=0, death=0, aim_shaping=0.0, safety_shaping=0.0)
     previous = env.latest_reward
     _, reward, _, _, _ = env.step(0)
     terms = check_accounting(env, reward)

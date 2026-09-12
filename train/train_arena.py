@@ -57,7 +57,7 @@ from stable_baselines3.common.monitor import Monitor  # noqa: E402
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv  # noqa: E402
 
 from arena.constants import CONTROL_STYLES  # noqa: E402
-from arena.env import ArenaEnv  # noqa: E402
+from arena.env import ArenaEnv, shaping_config  # noqa: E402
 from arena.mechanics import MechanicsConfig  # noqa: E402
 from arena.observation import describe  # noqa: E402
 from common.config import ArenaTrainConfig  # noqa: E402
@@ -96,12 +96,19 @@ def make_env(
     rank: int,
     monitor_dir: Path | None = None,
     mechanics: bool = False,
+    aim_strength: float | None = None,
+    safety_strength: float | None = None,
 ) -> Callable[[], gym.Env]:
     """Build the thunk `SubprocVecEnv` calls inside each worker.
 
     Each worker gets `seed + rank` so the eight arenas do not replay the same spawner layouts, and
     a `Monitor` carrying `BEHAVIOUR_INFO_KEYS` so the behavioural metrics survive the episode
     boundary and reach the callback.
+
+    `aim_strength`/`safety_strength`, when given, override `config/arena.yaml`'s
+    `shaping.aim_strength`/`shaping.safety_strength` for this run only -- the same
+    override-one-field convention every other hyperparameter here uses, so an experiment can vary
+    either shaping coefficient without editing the checked-in config.
     """
 
     def _init() -> gym.Env:
@@ -110,6 +117,13 @@ def make_env(
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
         env: gym.Env = ArenaEnv(control_style=control_style, render_mode=None, mechanics=mechanics)
+        overrides = {}
+        if aim_strength is not None:
+            overrides["aim_strength"] = aim_strength
+        if safety_strength is not None:
+            overrides["safety_strength"] = safety_strength
+        if overrides:
+            env.shaping = replace(env.shaping, **overrides)
         filename = None if monitor_dir is None else str(monitor_dir / f"worker_{rank}")
         env = Monitor(env, filename=filename, info_keywords=BEHAVIOUR_INFO_KEYS + (
             ("pickups_collected", "shield_blocks", "elites_killed") if mechanics else ()))
@@ -126,6 +140,8 @@ def build_vec_env(
     seed: int,
     monitor_dir: Path | None = None,
     mechanics: bool = False,
+    aim_strength: float | None = None,
+    safety_strength: float | None = None,
 ) -> VecEnv:
     """`n_envs` monitored arenas. `SubprocVecEnv` above one env, `DummyVecEnv` at one.
 
@@ -137,7 +153,10 @@ def build_vec_env(
     if monitor_dir is not None:
         monitor_dir.mkdir(parents=True, exist_ok=True)
 
-    factories = [make_env(control_style, seed, rank, monitor_dir, mechanics) for rank in range(n_envs)]
+    factories = [
+        make_env(control_style, seed, rank, monitor_dir, mechanics, aim_strength, safety_strength)
+        for rank in range(n_envs)
+    ]
     if n_envs == 1:
         return DummyVecEnv(factories)
     return SubprocVecEnv(factories)
@@ -281,6 +300,16 @@ def train(args: argparse.Namespace) -> Path:
         models_dir = models_dir / "mechanics"
     models_dir.mkdir(parents=True, exist_ok=True)
     model_path = models_dir / f"{config.algorithm.lower()}_{args.style}"
+    # None means "config/arena.yaml's checked-in default applied"; recorded resolved so run.json
+    # never leaves the actually-used shaping strengths to be inferred from whatever the config said
+    # at some other time.
+    resolved_aim_strength = (
+        args.aim_strength if args.aim_strength is not None else shaping_config().aim_strength
+    )
+    resolved_safety_strength = (
+        args.safety_strength if args.safety_strength is not None
+        else shaping_config().safety_strength
+    )
 
     metadata = write_run_metadata(
         run_dir / "run.json",
@@ -293,12 +322,17 @@ def train(args: argparse.Namespace) -> Path:
             "mechanics_config": asdict(MechanicsConfig.from_yaml()) if mechanics else None,
             "model_path": str(model_path.with_suffix(".zip")),
             "ignored_hyperparameters": ignored_hyperparameters(config),
+            "aim_strength": resolved_aim_strength,
+            "safety_strength": resolved_safety_strength,
         },
     )
     print(f"[train_arena] {name}")
     print(f"[train_arena] {json.dumps(metadata, indent=2)}")
 
-    venv = build_vec_env(args.style, config.n_envs, config.seed, monitor_dir, mechanics)
+    venv = build_vec_env(
+        args.style, config.n_envs, config.seed, monitor_dir, mechanics,
+        args.aim_strength, args.safety_strength,
+    )
     try:
         model = build_model(config, venv, run_dir, device=args.device, verbose=args.verbose)
         callbacks = CallbackList([
@@ -334,6 +368,8 @@ def train(args: argparse.Namespace) -> Path:
             "mechanics_config": asdict(MechanicsConfig.from_yaml()) if mechanics else None,
             "model_path": str(model_path.with_suffix(".zip")),
             "ignored_hyperparameters": ignored_hyperparameters(config),
+            "aim_strength": resolved_aim_strength,
+            "safety_strength": resolved_safety_strength,
             "finished": datetime.now().isoformat(timespec="seconds"),
             "wall_clock_seconds": round(elapsed, 1),
         },
@@ -363,6 +399,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--net-arch", type=int, nargs="+", default=None,
                         help="hidden layer widths, e.g. --net-arch 128 128")
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--aim-strength", type=float, default=None,
+                        help="override config/arena.yaml shaping.aim_strength for this run only")
+    parser.add_argument("--safety-strength", type=float, default=None,
+                        help="override config/arena.yaml shaping.safety_strength for this run only")
     parser.add_argument("--tag", default=None,
                         help="short label folded into the run name, e.g. the swept axis")
     parser.add_argument("--run-name", default=None,
