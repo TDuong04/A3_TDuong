@@ -110,6 +110,21 @@ Train new 36-feature policies with `python -m train.train_arena --style direct -
 in `models/`. Omitting `--mechanics` everywhere keeps the baseline behaviour and checkpoints
 untouched.
 
+**Opt-in auto-aim for `rotation`** (`--auto-aim` in both scripts, ticket
+[A3-036](docs/tickets/A3-036-add-opt-in-auto-aim-for-rotation.md)): SHOOT fires a lead-computed
+intercept at the nearest living enemy — the nearest living spawner when no enemy is alive —
+instead of along the ship's nose. Turning, thrust, the observation, the action set and every
+reward are unchanged, so only where the bullet goes differs. It is rejected for `direct`, whose
+heading already equals its movement direction. Train it with
+`python -m train.train_arena --style rotation --auto-aim --aim-strength 0 --safety-strength 0`
+(the aim/safety shaping exists to teach manual aiming, which auto-aim makes moot); it saves under
+`models/auto_aim/` and evaluates into `results/arena_eval/auto_aim/`, so the shipped rotation
+baseline and its evidence tables stay untouched.
+
+```bash
+python -m eval.play_arena --human --style rotation --auto-aim --seed 0   # try it by hand
+```
+
 ## Team
 
 | Member           | Student number | Owns                                                                                                                                                                                                                                                               |
@@ -179,6 +194,9 @@ headless and quick except the sweep test, which trains a real model; `pytest -m 
 ## Commands
 
 ```bash
+# Launcher — pick a part, level/style and agent-vs-human from one retro menu screen
+python -m eval.launcher
+
 # Part I — training
 python -m train.train_gridworld --level 0 --algo q
 python -m train.train_gridworld --level 1 --algo sarsa
