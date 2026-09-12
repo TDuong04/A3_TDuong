@@ -179,6 +179,8 @@ headless and quick except the sweep test, which trains a real model; `pytest -m 
 ## Commands
 
 ```bash
+# Launcher — pick a part, level/style and agent-vs-human from one retro menu screen
+python -m eval.launcher
 # Part I — training
 python -m train.train_gridworld --level 0 --algo q
 python -m train.train_gridworld --level 1 --algo sarsa
