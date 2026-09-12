@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Shared agent context for **A3 — Reinforcement Learning and DL Agents** (RMIT, Games and AI
-Techniques, 40% of the course grade, due **19 September 2026**).
+Techniques, 40% of the course grade, due **13 September 2026, 11:59 PM**).
 
 This file is committed so that every member's Claude Code session starts from the same
 understanding. It is loaded automatically from the repo root. Do not keep a private copy with
