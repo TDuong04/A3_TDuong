@@ -377,14 +377,28 @@ class TestActionRepeat:
         assert reward != pytest.approx(REWARD_PER_STEP * ACTION_REPEAT)
 
     def test_the_cooldown_survives_the_repeat(self):
-        """Three frames of a held SHOOT must not become three bullets."""
-        env = quiet_env("rotation")
-        env.step(RotationAction.SHOOT)
-        assert len(env.bullets) == 1
+        """Three frames of a held SHOOT must not become three bullets, and the cooldown must
+        still unblock on schedule once it genuinely elapses.
 
-        for _ in range(4):
+        The schedule is derived from config rather than written in: one agent step drains
+        `ACTION_REPEAT * FIXED_DT` of cooldown, so a held trigger is blocked for
+        `ceil(shoot_cooldown / that)` steps and fires again on the next one. Hard-coding the
+        answer for one `shoot_cooldown` is how this test broke when the value was retuned -- the
+        invariant is the ratio, not the number.
+        """
+        env = quiet_env("rotation")
+        drained_per_step = ACTION_REPEAT * FIXED_DT
+        blocked_steps = math.ceil(env.player.config.shoot_cooldown / drained_per_step)
+
+        env.step(RotationAction.SHOOT)
+        assert env.bullets_fired == 1
+
+        for _ in range(blocked_steps - 1):
             env.step(RotationAction.SHOOT)
-        assert len(env.bullets) == 1  # cooldown is 0.25 s = 15 frames = 5 agent steps
+        assert env.bullets_fired == 1, "a held trigger beat the cooldown"
+
+        env.step(RotationAction.SHOOT)
+        assert env.bullets_fired == 2, "the cooldown never cleared"
 
 
 # --- rewards --------------------------------------------------------------------------------------
@@ -521,12 +535,28 @@ class TestAimShaping:
 
         assert shaping_config().aim_strength >= 0.0
 
-    def test_is_zero_with_no_enemy_alive(self):
+    def test_it_tracks_the_spawners_once_the_enemies_are_gone(self):
+        """With the arena cleared there is still something to shoot. This term used to go flat
+        the moment the last enemy died, which left nothing pointing the ship at the spawners it
+        had to destroy to advance -- measured, the shipped model idled through 40.7% of every
+        episode that way."""
         env = quiet_env("rotation")
         env.shaping = replace(env.shaping, aim_strength=0.05)
-        assert not env.enemies
-        _obs, reward, *_ = env.step(RotationAction.NOOP)
-        assert reward == pytest.approx(REWARD_PER_STEP)
+        assert not env.enemies and env.spawners
+
+        _obs, reward, *_ = env.step(RotationAction.ROTATE_LEFT)
+
+        assert reward != pytest.approx(REWARD_PER_STEP), "still flat with spawners left to kill"
+
+    def test_is_zero_with_nothing_left_alive_at_all(self):
+        """Asserted on the potential rather than through `step()`: an arena with no spawners left
+        advances the phase on the same step and repopulates, so the state cannot be observed from
+        a reward."""
+        env = quiet_env("rotation")
+        env.enemies = []
+        env.spawners = []
+
+        assert env._aim_potential() == 0.0
 
     def test_rewards_turning_to_face_an_enemy_and_penalises_turning_away(self):
         """Place an enemy 90 degrees off the nose. Turning toward it must earn strictly more
@@ -562,8 +592,8 @@ class TestAimShaping:
         def phi(env: ArenaEnv) -> float:
             enemy = env.enemies[0]
             dx, dy = enemy.x - env.player.x, enemy.y - env.player.y
-            local_x, _ = to_ship_local(env.player.heading, dx, dy)
-            return local_x / math.hypot(dx, dy)
+            local_x, local_y = to_ship_local(env.player.heading, dx, dy)
+            return 1.0 - abs(math.atan2(local_y, local_x)) / math.pi
 
         env = quiet_env("rotation")
         env.shaping = replace(env.shaping, aim_strength=0.05)
@@ -629,12 +659,11 @@ class TestSafetyShaping:
         """Direct correctness check: the recorded contribution for one step must equal
         `strength * (gamma * phi(s') - phi(s))`, with phi computed independently here from the
         player's and enemy's positions rather than by calling `_safety_potential`."""
-        from arena.observation import observation_scales
 
         def phi(env: ArenaEnv) -> float:
             enemy = env.enemies[0]
             distance = math.hypot(enemy.x - env.player.x, enemy.y - env.player.y)
-            return min(1.0, distance / observation_scales().diagonal)
+            return min(1.0, distance / env.shaping.safe_distance)
 
         env = quiet_env("rotation")
         env.shaping = replace(env.shaping, safety_strength=0.05)

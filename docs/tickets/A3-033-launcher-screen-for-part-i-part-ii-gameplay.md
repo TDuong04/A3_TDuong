@@ -8,6 +8,7 @@ rubric: none
 points_at_risk: 0
 area: eval
 github: https://github.com/TDuong04/A3_TDuong/issues/62
+github: https://github.com/TDuong04/A3_TDuong/issues/68
 owner: unassigned
 blocks: []
 blocked_by: []
@@ -122,3 +123,4 @@ ticket and is not reachable from the launcher; it remains a CLI-only workflow vi
   `eval.play_gridworld`. Arena human play reuses `eval.play_arena` with the existing `--human`
   flag. No new CLI surface is needed anywhere — this is purely launcher wiring to scripts that
   already accept these options.
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/68

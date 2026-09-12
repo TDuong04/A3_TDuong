@@ -102,7 +102,7 @@ never a formatting note.
 
 ## Schedule
 
-The deadline is 19 September 2026. Where a finding implies retraining or re-measuring, state the
+The deadline is 13 September 2026, 11:59 PM. Where a finding implies retraining or re-measuring, state the
 wall-clock it costs and whether it still fits. Schedule risk is real risk, and a correct
 recommendation that cannot be executed in the time left is the wrong recommendation — say so and
 give the cheaper one beside it.

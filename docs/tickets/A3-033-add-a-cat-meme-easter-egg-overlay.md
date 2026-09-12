@@ -7,6 +7,7 @@ priority: P2
 rubric: Creativity
 points_at_risk: 0
 area: eval
+github: https://github.com/TDuong04/A3_TDuong/issues/68
 owner: unassigned
 blocks: []
 blocked_by: []
@@ -79,3 +80,4 @@ graded criteria are satisfied there already).
   smoke-tested headless under `SDL_VIDEODRIVER=dummy`. No constants, rewards, action indices, or
   `step()` logic touched. Closing as done — acceptance criteria checked against the description of
   the shipped change, not merely asserted.
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/68

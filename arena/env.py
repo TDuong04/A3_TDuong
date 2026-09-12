@@ -138,6 +138,7 @@ class ShapingConfig:
 
     aim_strength: float
     safety_strength: float
+    safe_distance: float
     gamma: float
 
     @classmethod
@@ -147,6 +148,7 @@ class ShapingConfig:
         return cls(
             aim_strength=float(shaping["aim_strength"]),
             safety_strength=float(shaping["safety_strength"]),
+            safe_distance=float(shaping["safe_distance"]),
             gamma=float(data["training"]["gamma"]),
         )
 
@@ -471,42 +473,68 @@ class ArenaEnv(gym.Env):
         return value
 
     def _aim_potential(self) -> float:
-        """`phi(s)` for the optional aim-alignment shaping term (`ShapingConfig`): the cosine of
-        the angle between the ship's heading and the direction to the *lead point* -- where the
-        nearest living enemy will be when a bullet fired this instant would reach it -- rather than
-        its current position, in the same ship-local frame `observation.py` uses. +1.0 is pointed
-        straight at the lead point, -1.0 pointed straight away, 0.0 when no enemy is alive or the
-        ship itself is not -- `phi(terminal) = 0` is what keeps potential-based shaping from paying
-        out across a death.
+        """`phi(s)` for the optional aim-alignment shaping term (`ShapingConfig`): how nearly the
+        ship is pointed at the *lead point* -- where the thing it should be shooting will be when a
+        bullet fired this instant would reach it. 1.0 is pointed straight at it, 0.0 is pointed
+        dead astern, and 0.0 also when there is nothing to shoot or the ship is dead --
+        `phi(terminal) = 0` is what keeps potential-based shaping from paying out across a death.
 
-        Using the raw current position here taught exactly the miss it was meant to fix: PPO was
-        rewarded for pointing at where the enemy *was*, so a converged policy had no incentive to
-        lead a moving target at all. `_lead_offset` solves the intercept time against the enemy's
-        instantaneous velocity (linear extrapolation, matching how `Enemy.update` itself only ever
-        commits to one frame of heading); still a pure function of `s`, so the term stays
-        potential-based and the optimal-policy-invariance argument is untouched.
+        Three things here were each measured teaching the wrong lesson, on the shipped rotation
+        model over 6 deterministic episodes:
+
+        *Target.* This tracked only the nearest living enemy and returned 0.0 once they were gone,
+        so with the arena cleared the term was perfectly flat and nothing pointed the ship at the
+        spawners it still had to destroy. The agent sat out 40.7% of every episode that way. It now
+        falls back to the nearest living spawner, which is exactly what is left to shoot.
+
+        *Lead frame.* The intercept was solved against the target's velocity **relative to the
+        ship**. `Bullet.__init__` gives a bullet a fixed world-frame velocity and inherits nothing
+        from the ship, so that solved an intercept no bullet ever flies, and the error grows with
+        ship speed -- which the rebalance raised 220 -> 380. Measured, it swung the commanded
+        heading by 0.59 rad (34 degrees) purely because the ship was moving, matching the 33.6
+        degree median aim error the live model fired at. The lead now uses the target's own
+        velocity (`Spawner` is stationary and carries none, hence the `getattr` default).
+
+        *Shape.* This returned `cos(bearing error)`, which is stationary at 180 degrees: an enemy
+        chasing from directly astern sat exactly on that stationary point, so turning either way
+        paid only 1 - cos(10 deg) = 0.015 for a decision's worth of turn and the policy had almost
+        nothing to learn from -- one episode crossed the nose 392 times without ever settling. The
+        angle is now used directly, so the same turn pays 0.056 and every bearing has a real
+        gradient.
+
+        Still a pure function of `s`, so the term stays potential-based and the
+        optimal-policy-invariance argument (Ng, Harada & Russell 1999) is untouched.
         """
         if not self.player.alive:
             return 0.0
-        enemy = nearest_alive(self.player, [e for e in self.enemies if e.alive])
-        if enemy is None:
+        target = nearest_alive(self.player, [e for e in self.enemies if e.alive])
+        if target is None:
+            target = nearest_alive(self.player, [s for s in self.spawners if s.alive])
+        if target is None:
             return 0.0
-        dx, dy = enemy.x - self.player.x, enemy.y - self.player.y
-        rvx, rvy = enemy.vx - self.player.vx, enemy.vy - self.player.vy
-        lead_x, lead_y = _lead_offset(dx, dy, rvx, rvy, self.player.config.bullet_speed)
-        distance = math.hypot(lead_x, lead_y)
-        if distance <= 1e-6:
+        dx, dy = target.x - self.player.x, target.y - self.player.y
+        tvx, tvy = getattr(target, "vx", 0.0), getattr(target, "vy", 0.0)
+        lead_x, lead_y = _lead_offset(dx, dy, tvx, tvy, self.player.config.bullet_speed)
+        if math.hypot(lead_x, lead_y) <= 1e-6:
             return 1.0  # standing on top of the lead point: no meaningful angle, treat as aligned
-        local_x, _ = to_ship_local(self.player.heading, lead_x, lead_y)
-        return local_x / distance
+        local_x, local_y = to_ship_local(self.player.heading, lead_x, lead_y)
+        return 1.0 - abs(math.atan2(local_y, local_x)) / math.pi
 
     def _safety_potential(self) -> float:
-        """`phi(s)` for the optional distance-keeping shaping term (`ShapingConfig`): distance to
-        the same nearest living enemy `_aim_potential` tracks, scaled to [0, 1] by the arena
-        diagonal. 1.0 is as far apart as the arena allows, 0.0 is touching. No enemy alive scores
-        1.0 too -- nothing is closing on the ship, which is the same "as safe as maximally far
-        away" a very distant enemy already approaches continuously. `phi(terminal) = 0`, same
-        convention and same reason as `_aim_potential`.
+        """`phi(s)` for the optional distance-keeping shaping term (`ShapingConfig`): how far the
+        nearest living enemy is, as a fraction of `shaping.safe_distance`, and saturating there.
+        1.0 is "far enough", 0.0 is touching. No enemy alive scores 1.0 too -- nothing is closing
+        on the ship. `phi(terminal) = 0`, same convention and same reason as `_aim_potential`.
+
+        This used to scale by the arena *diagonal* instead, so it kept paying for every additional
+        pixel of retreat right up to the longest span in the arena -- and the points farthest from
+        anything in a rectangle are its corners, so the term was literally maximised by wedging
+        into one. It was not that the agent failed to learn to fight; corner-camping was the
+        reward. Measured on the shipped rotation model, a corner scored 0.88 against mid-arena's
+        0.41, and corner dwelling rose from 0.9% to 15.0% of steps once the rebalance made the
+        player tanky enough to survive there. Saturating at a fixed safe range keeps the "don't let
+        it touch you" gradient where it matters and flattens it beyond that, so backing into a
+        corner buys nothing.
 
         Deliberately independent of `_aim_potential`: that term is about angle, this one is about
         range, so "stay pointed at it" and "don't close the distance" are two separate incentives
@@ -518,7 +546,7 @@ class ArenaEnv(gym.Env):
         if enemy is None:
             return 1.0
         distance = math.hypot(enemy.x - self.player.x, enemy.y - self.player.y)
-        return min(1.0, distance / observation_scales().diagonal)
+        return min(1.0, distance / self.shaping.safe_distance)
 
     def _advance_pickups(self) -> None:
         for pickup in self.pickups:

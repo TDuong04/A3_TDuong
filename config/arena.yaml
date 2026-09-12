@@ -3,12 +3,34 @@
 
 training:
     algorithm: PPO # PPO or DQN (brief permits either)
-    total_timesteps: 400000
+    # 400k was the budget until the difficulty rebalance, and it silently stopped being enough:
+    # slower enemies, 5s spawn intervals and a tankier player stretched mean episode length ~4x
+    # (245 -> ~1050 steps under random play), so the same 400k bought roughly a quarter of the
+    # episodes and a quarter of the episode-level signal. Retrained at 400k both styles collapsed
+    # -- `direct` to -8.03 return and 1/30 phases cleared, barely above the -12.16 random baseline.
+    # The identical config at 1.6M recovers and beats the old numbers (rotation +353 vs +228,
+    # 30/30 cleared, 93% survival). Costs ~112s per model on CPU, so the budget is not the
+    # constraint; noticing it was.
+    total_timesteps: 1600000
     n_envs: 8 # SubprocVecEnv; requires an `if __name__ == "__main__":` guard on Windows
     learning_rate: 0.0003
     n_steps: 2048
     batch_size: 512
-    gamma: 0.99
+    # gamma's effective horizon is 1/(1-gamma): 100 steps at 0.99, which was ~40% of an episode
+    # before the rebalance (~245 steps under random play) but only ~5% of one now (episodes run
+    # ~1600-2000 steps post-rebalance). `direct` clears a phase roughly every ~530 steps, which
+    # 0.99 discounts to 0.99^530 = 0.005 -- almost invisible to the agent, and it was the style
+    # measured worst-hit by the rebalance. Swept at 400k-budget-equivalent (full 1.6M budget, both
+    # styles) and confirmed on 3 additional seeds for `direct` specifically, since a single-seed
+    # shaping sweep earlier the same day reversed completely on 3 seeds and the lesson was not to
+    # trust one again:
+    #   direct,   seed 1 (shipped): 0.99 +52.72 / 0.997 +72.38 / 0.999 +68.92 (return)
+    #   direct,   seeds 2+3 (confirm): 0.99 +22.08+-1.37 / 0.997 +47.38+-13.75 (survival 32%->48%)
+    #   rotation, seed 0 (shipped): 0.99 +353.29 / 0.997 +357.69 / 0.999 +348.95
+    # 0.997 (horizon ~333) wins for direct on every seed tried and is a mild, lower-variance
+    # improvement for rotation; 0.999 (horizon 1000) is worse for both, consistent with a horizon
+    # that has outrun what `n_steps=2048` can bootstrap accurately.
+    gamma: 0.997
     ent_coef: 0.005 # non-zero: guards against early policy collapse to a single action
     net_arch: [64, 64] # rubric J2 requires at least one hidden layer
     seed: 0
@@ -20,47 +42,64 @@ training:
 # all in the report, not the magnitude. Both at 0.0 disables shaping outright and falls back to
 # exactly the brief's reward list.
 #
-# aim_strength alone (0.01) was tried first: a 3-seed comparison against the un-shaped baseline
-# (rotation style, 400k steps each) raised mean hit-rate 12.8% -> 16.8%, but cut mean survival
-# 20% -> ~8%. Rewarding "point at the nearest enemy" gave no reason not to also close distance with
-# it, and PPO found that reason on its own. safety_strength is the deliberate counterweight: same
-# nearest enemy, but on distance instead of angle, so tracking it and not closing on it are two
-# separate incentives instead of one term trading them against each other.
+# BOTH SHIP AT 0.0. Shaping was measured net-harmful and both models are trained without it, so
+# the reward is exactly the brief's fixed list. The history below is why, because "we tried it and
+# turned it off" is a result the report cites, not an absence of work.
 #
-# Checked-in default is OFF (both 0.0): this falls back to exactly the brief's reward list, which
-# is what `direct` ships trained under -- see below. `rotation`'s shipped model overrides both via
-# `--aim-strength`/`--safety-strength` at train time, the same per-style-override convention
-# `--seed` already uses (direct is shipped from seed 1, rotation from seed 0; neither is the
-# checked-in `training.seed` default either).
+# Round 1 built these terms against a cosine potential and shipped rotation at
+# aim=.005/safety=.02. Watching that agent play turned up four behaviours, and instrumenting it
+# over 6 deterministic episodes turned up three defects in the terms themselves:
 #
-# Why the two styles differ: rotation started with a real aiming problem (12.8% hit rate vs
-# direct's 17.3%) that this shaping was built to fix. direct did not have that problem, and a 2x2
-# grid confirmed it does not tolerate the same medicine -- every combination tried, down to
-# aim=0.0025/safety=0.01, cut its survival from the baseline's 53% to single digits, because
-# `direct`'s heading always equals its movement direction, so an "aim at the enemy" incentive is
-# inseparable from a "move toward the enemy" incentive in a way it never is for rotation, which can
-# thrust and turn independently. direct ships unshaped; only rotation uses this feature.
+#   * `_aim_potential` tracked only the nearest living *enemy* and returned 0.0 once they were
+#     gone, so with the arena cleared nothing pointed the ship at the spawners it still had to
+#     kill. The agent idled through 40.7% of every episode.
+#   * its lead was solved against the target's velocity *relative to the ship*, but a bullet gets
+#     a fixed world-frame velocity and inherits nothing from the ship -- so it aimed at a point no
+#     bullet flies through. Measured: 0.59 rad (34 deg) of commanded-heading error from ship
+#     motion alone, matching the 33.6 deg median the live model actually fired at.
+#   * `cos(bearing error)` is stationary at 180 deg, exactly where an enemy chasing from astern
+#     sits: turning either way paid only 1-cos(10 deg) = 0.015 per decision, so the policy had
+#     nothing to learn from. One episode crossed the nose 392 times without settling.
 #
-# rotation's values are the outcome of a 2x3 joint grid (aim in {0.005, 0.01}, safety in
-# {0.01, 0.02, 0.04}, 400k steps), with the top two candidates confirmed on 3 seeds each (mean over
-# 30 deterministic episodes per seed):
+# All three are fixed in `arena/env.py` (see `_aim_potential`), and `_safety_potential` now
+# saturates at `safe_distance` instead of scaling by the arena diagonal. Round 2 then retrained
+# rotation at five strengths, 400k steps, top three confirmed on 3 seeds (mean +- sd, 6
+# deterministic episodes/seed):
 #
-#   config              survival   hit-rate   return   phase   cleared
-#   baseline (0, 0)       20.0%      12.8%     7.55     1.93    28/30
-#   aim=.005 safety=.01   16.7%      15.1%     9.52     1.99   26.7/30
-#   aim=.005 safety=.02   21.1%      13.0%     8.95     1.98   28.7/30   <- shipped (rotation only)
+#   config                corner%     hit-rate      spawners    empty-arena%   nose-crossings
+#   OFF (0, 0)          2.6 +- 1.7   28.6 +- 10.9  188 +- 84     40.4 +- 5.7    62 +- 31   <- shipped
+#   aim=.02 safety=.02  16.9 +- 14.4 16.3 +- 15.2   95 +- 112    26.8 +- 4.8    47 +- 32
+#   aim=.005 safety=.02 21.4 +- 15.9 10.4 +- 4.1    39 +- 23     24.9 +- 2.3   162 +- 38
 #
-# aim=.005/safety=.01 pushes hit-rate further but its survival mean sits *below* baseline (one
-# seed got lucky at 23%; the other two did not) -- it does not reliably deliver the "increase
-# survival" half of the goal. aim=.005/safety=.02 is the only candidate that beat the un-shaped
-# baseline on every one of survival, hit-rate, return, phase and clears, consistently across all 3
-# seeds, which is why it is the one shipped despite the smaller hit-rate gain. Strengths of 0.05
-# and above on aim_strength alone were rejected outright in the earlier single-term search: the
-# agent stopped firing almost entirely (fired/episode collapsed from ~140 to ~1-4), farming the
-# shaping term by orbiting a target without ever engaging it.
+# Corrected terms did not rescue the idea. Aim shaping cuts idle time but collapses spawner kills
+# (188 -> 39): it points the ship at a spawner and orbits it, the same failure the round-1 search
+# saw at aim>=0.05. Safety shaping still parks the ship in corners at any strength -- saturating
+# the potential was not enough, because in a bounded arena "flee the enemy" ends at a wall by
+# construction. Note the standard deviations: the shaped rows are unstable, not merely worse.
+#
+# Unshaped is what beat the shipped model on the behaviours that prompted this: corner dwelling
+# 15.0% -> 2.6%, nose-crossings ~89 -> 62, hit-rate and spawner kills unchanged.
+#
+# Not fixed, and not fixable here: the agent fires at 32% of steps against a 33% cooldown ceiling
+# -- it holds the trigger. A miss costs nothing, so spraying is optimal, and potential-based
+# shaping is *provably policy-invariant* and therefore cannot make aiming optimal instead. Only a
+# mechanic change (scarcer shots, limited ammo) or a non-potential-based miss penalty would move
+# it, and the latter is exactly what the brief forbids. Documented as a limitation, not tuned at.
+#
+# Seeds: rotation ships from seed 0, direct from seed 1 -- neither is the checked-in
+# `training.seed`, the same per-style-override convention `--seed` has always used.
 shaping:
-    aim_strength: 0.0 # coefficient on gamma*phi(s')-phi(s); phi = cosine alignment to the nearest enemy
-    safety_strength: 0.0 # coefficient on gamma*phi(s')-phi(s); phi = distance/diagonal to the nearest enemy
+    aim_strength: 0.0 # coefficient on gamma*phi(s')-phi(s); phi = 1 - |bearing error| / pi to the lead point
+    safety_strength: 0.0 # coefficient on gamma*phi(s')-phi(s); phi = distance/safe_distance, saturating at 1
+    # Range at which the ship is "far enough" and the safety term stops paying for more retreat.
+    # It used to scale by the arena diagonal (1174 px), which meant every extra pixel of backing
+    # away scored higher -- and the farthest points in a rectangle are its corners, so the term was
+    # maximised by wedging into one (measured: corner 0.88 vs mid-arena 0.41, and corner dwelling
+    # 0.9% -> 15.0% of steps after the rebalance made the player tanky enough to survive there).
+    # 300 px is comfortably outside contact range for the fastest configured enemy (70 px/s) while
+    # still inside the arena's short axis, so "keep your distance" stays learnable and "hide in the
+    # corner" stops being worth anything.
+    safe_distance: 300
 
 # Reduced-budget sweep for rubric J3 and report row R5. One axis varied at a time from the
 # baseline; winner re-run on 3 seeds before being trusted.
@@ -126,9 +165,9 @@ player:
     max_health: 10
     speed: 380 # max speed, pixels/second - the SAME cap for both control styles
     thrust: 450 # pixels/second^2 - the same acceleration for both control styles
-    rotation_speed: 400 # degrees/second (style 1 only; style 2 faces where it moves)
+    rotation_speed: 300 # degrees/second (style 1 only; style 2 faces where it moves)
     drag: 0.9 # velocity retained per second of coasting, applied as drag ** dt
-    shoot_cooldown: 0.15 # seconds
+    shoot_cooldown: 0.25 # seconds
     bullet_speed: 520 # pixels/second
     invulnerability_time: 0.6 # seconds after taking a hit
     radius: 14 # collision radius, pixels (collision is circle-vs-circle)
