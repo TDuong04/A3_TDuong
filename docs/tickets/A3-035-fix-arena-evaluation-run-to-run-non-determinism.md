@@ -7,6 +7,7 @@ priority: P1
 rubric: I
 points_at_risk: 4
 area: eval
+github: https://github.com/TDuong04/A3_TDuong/issues/70
 owner: unassigned
 blocks: []
 blocked_by: []
@@ -119,3 +120,4 @@ sites, `train/sweep_arena.py` (shares the same `evaluate()` path).
   it. A final `--style both` run left `results/arena_eval/comparison.md` internally consistent
   (both rows from one invocation) rather than mid-experiment, but it is itself just one more sample
   per the table above. Root cause not identified. Left open — not this agent's to fix.
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/70

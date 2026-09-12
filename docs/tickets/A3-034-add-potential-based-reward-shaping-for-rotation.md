@@ -7,6 +7,7 @@ priority: P2
 rubric: Creativity
 points_at_risk: 0
 area: arena
+github: https://github.com/TDuong04/A3_TDuong/issues/69
 owner: unassigned
 blocks: []
 blocked_by: []
@@ -157,3 +158,4 @@ don't close the gap" conclusion is being relied on here.
   caveat above) — filed as a new, separate ticket **A3-035** rather than reopening this one, since
   the shaping feature itself does not depend on that harness bug and is independently verified
   correct. Closing A3-034 as done on that basis.
+- mirrored to GitHub issue https://github.com/TDuong04/A3_TDuong/issues/69
