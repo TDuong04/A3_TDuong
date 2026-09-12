@@ -19,6 +19,10 @@ from eval.play_arena import ArenaEvalError, play, validate_policy_space, write_r
 @pytest.mark.parametrize('style', CONTROL_STYLES)
 def test_real_spawner_kill_drop_collection_and_one_block(style):
     env = ArenaEnv(control_style=style, seed=0, mechanics=True)
+    # This test asserts reward as an exact sum of the frozen constants in `constants.py`; the
+    # optional shaping terms (config-driven, arena/env.py's ShapingConfig) are exercised on their
+    # own in test_arena_env.py's TestAimShaping/TestSafetyShaping instead of smuggled in here.
+    env.shaping = replace(env.shaping, aim_strength=0.0, safety_strength=0.0)
     env.player.heading = 0
     target = Spawner(env.player.x + 48, env.player.y, env.phase_settings)
     target.health = 1

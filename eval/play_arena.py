@@ -224,6 +224,8 @@ def evaluate(
     phases: list[int] = []
     spawners: list[int] = []
     kills: list[int] = []
+    fired: list[int] = []
+    hit: list[int] = []
     steps: list[int] = []
     survived: list[bool] = []
     mechanic_metrics = {key: [] for key in ("pickups_collected", "shield_blocks", "elites_killed")}
@@ -240,6 +242,8 @@ def evaluate(
         phases.append(int(info.get("phase", 1)))
         spawners.append(int(info.get("spawners_destroyed", 0)))
         kills.append(int(info.get("enemies_killed", 0)))
+        fired.append(int(info.get("bullets_fired", 0)))
+        hit.append(int(info.get("bullets_hit", 0)))
         steps.append(int(env.steps))
         survived.append(not terminated)
         for key, values in mechanic_metrics.items():
@@ -266,6 +270,12 @@ def evaluate(
         "phase_cleared_episodes": sum(1 for p in phases if p > 1),
         "spawners_mean": mean(spawners),
         "enemies_mean": mean(kills),
+        # Aim quality: bullets landed on an enemy or a spawner, over bullets fired, across the
+        # whole sample -- not an average of per-episode ratios, so an episode with few shots
+        # cannot swing the number as much as one with many.
+        "bullets_fired_mean": mean(fired),
+        "bullets_hit_mean": mean(hit),
+        "hit_rate": (sum(hit) / sum(fired)) if sum(fired) > 0 else 0.0,
         "steps_mean": mean(steps),
         "survival_rate": mean([1.0 if s else 0.0 for s in survived]),
         "returns": returns,
@@ -510,19 +520,16 @@ def wait_for_start(renderer, style: str, mechanics: bool = False) -> bool:
 
 
 def wait_for_retry(renderer, env, view) -> bool:
-    """Freeze on the finished episode — meme, banner and all — until the player retries.
+    """Freeze on the finished episode -- meme, banner and all -- until R (retry) is pressed or the
+    window closes. Returns False to quit, mirroring `wait_for_start`.
 
-    Human play only. `DEATH_HOLD_SECONDS`/`renderer.hold()` is a fixed beat meant for an agent
-    demo that has to keep running unattended for recording; a human who just died gets to
-    actually read the meme caption instead of it flashing by in a second. Returns False on quit,
-    mirroring `wait_for_start`.
-    """Hold on the end banner until R (retry) or the window closes. Returns False to quit.
-
-    `env` and `view` are the finished episode's own state, unmodified -- this only keeps redrawing
-    the same last frame with the retry prompt added, exactly like `hold()` does without one. Reached
-    only from a real windowed human session; see `play()`, which gates it the same way it gates
-    `wait_for_start`, so no automated or frame-capped run can hang waiting for a key nobody is there
-    to press.
+    Human play only. `DEATH_HOLD_SECONDS`/`renderer.hold()` is a fixed beat meant for an agent demo
+    that has to keep running unattended for recording; a human who just died gets to actually read
+    the meme caption instead of it flashing by in a second. `env` and `view` are the finished
+    episode's own state, unmodified -- this only keeps redrawing the same last frame with the retry
+    prompt added. Reached only from a real windowed human session; see `play()`, which gates it the
+    same way it gates `wait_for_start`, so no automated or frame-capped run can hang waiting for a
+    key nobody is there to press.
     """
     import pygame
 
@@ -629,11 +636,7 @@ def play(
             # panel stays up through the hold instead of blinking off for the closing shot.
             renderer.draw(env, view)
             if max_frames is None:
-                if human and not headless:
-                    if not wait_for_retry(renderer, env, view):
-                        raise KeyboardInterrupt
-                else:
-                    renderer.hold(env, view)
+                renderer.hold(env, view)
             returns.append(float(env.episode_reward))
             phases.append(int(info.get("phase", 1)))
             episode += 1
