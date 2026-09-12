@@ -379,10 +379,17 @@ def test_a_run_leaves_model_logs_checkpoints_and_its_own_config(scratch_dir: Pat
 
 
 def test_the_event_file_carries_the_behavioural_scalars(scratch_dir: Path):
-    """The criterion in full: the metrics are readable in TensorBoard, not just in stdout."""
+    """The criterion in full: the metrics are readable in TensorBoard, not just in stdout.
+
+    Needs at least one logged episode, which needs at least one completed episode. With a single
+    env this run cannot outlast `MAX_EPISODE_STEPS` (2000, frozen in `arena/constants.py`), so
+    2048 timesteps guarantees the max-steps truncation ends one regardless of how long the
+    rebalanced player now survives -- it must not depend on an early death from an untrained
+    policy, which the current config no longer delivers reliably inside a short budget.
+    """
     from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
-    train_arena.train(tiny_args(scratch_dir, run_name="tb", timesteps=1024))
+    train_arena.train(tiny_args(scratch_dir, run_name="tb", timesteps=2048))
 
     accumulator = EventAccumulator(str(scratch_dir / "logs" / "tb" / "tb_1"))
     accumulator.Reload()

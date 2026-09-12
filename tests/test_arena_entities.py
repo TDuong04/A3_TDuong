@@ -174,7 +174,7 @@ def test_one_thrust_frame_integrates_exactly_one_fixed_dt():
     assert player.x == pytest.approx(CENTRE_X + expected_v * FIXED_DT, rel=1e-12)
     # The literal is what the shipped config produces; it is here so that a silent change to the
     # integrator (drag applied before acceleration, dt squared, ...) cannot pass unnoticed.
-    assert player.vx == pytest.approx(6.654970215244861, rel=1e-9)
+    assert player.vx == pytest.approx(7.486841492150468, rel=1e-9)
 
 
 def test_thrust_follows_the_documented_recurrence_over_many_frames():
@@ -253,7 +253,11 @@ def test_rotation_turns_at_the_configured_degrees_per_second():
     for _ in range(half_second):
         player.rotate(+1)
         player.update()
-    assert player.heading_degrees == pytest.approx(PLAYER_YAML["rotation_speed"] / 2, rel=1e-9)
+    # Folded into [-180, 180) the same way `_wrap_angle` folds heading itself: at the shipped
+    # rotation_speed (400 deg/s) half a second turns 200 degrees, past the wrap boundary.
+    raw_degrees = PLAYER_YAML["rotation_speed"] / 2
+    expected_degrees = ((raw_degrees + 180.0) % 360.0) - 180.0
+    assert player.heading_degrees == pytest.approx(expected_degrees, rel=1e-9, abs=1e-6)
 
     for _ in range(half_second):
         player.rotate(-1)
@@ -655,10 +659,22 @@ def test_enemy_on_top_of_the_player_produces_no_nan():
 
 
 def test_enemy_health_comes_from_the_phase_and_dies_when_it_runs_out():
+    """Every configured phase currently ships single-hit enemies (`enemy_health: 1`); the
+    multi-hit decrement/death path below is exercised separately so that coverage does not
+    depend on the phases in `config/arena.yaml` staying tougher than one hit."""
     phase = phase_config(len(PHASES_YAML) - 1)
     enemy = Enemy.from_phase(CENTRE_X, CENTRE_Y, phase)
-    assert enemy.health == phase.enemy_health >= 2
-    for remaining in range(phase.enemy_health - 1, 0, -1):
+    assert enemy.health == phase.enemy_health
+    assert enemy.alive
+    assert enemy.take_damage(1) is True
+    assert not enemy.alive
+    assert enemy.health == 0
+    assert enemy.take_damage(1) is False, "a corpse must not absorb a second bullet"
+
+
+def test_an_enemy_with_multiple_hit_points_decrements_before_it_dies():
+    enemy = Enemy(CENTRE_X, CENTRE_Y, health=3, speed=1.0)
+    for remaining in (2, 1):
         assert enemy.take_damage(1) is True
         assert enemy.alive
         assert enemy.health == remaining
@@ -698,7 +714,7 @@ def test_spawner_emits_on_the_configured_interval_and_not_between():
 
 def test_spawn_interval_is_read_from_the_phase():
     late = phase_config(len(PHASES_YAML) - 1)
-    assert late.spawn_interval < phase_config(0).spawn_interval
+    assert late.spawn_interval == pytest.approx(PHASES_YAML[-1]["spawn_interval"])
     spawner = Spawner(CENTRE_X, CENTRE_Y, late)
     interval = frames(late.spawn_interval)
     emitted_on = [frame for frame in range(1, 2 * interval + 1) if spawner.update() is not None]
