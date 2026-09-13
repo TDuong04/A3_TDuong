@@ -349,67 +349,6 @@ results/     training curves, Q-tables, the sweep tables, screenshots for the re
 report/      report source and exported PDF
 ```
 
-## Tickets
-
-The backlog lives in [`docs/tickets/`](docs/tickets/INDEX.md) — one markdown file per ticket, with
-`INDEX.md` as the board. Every remaining piece of work is already tracked there, covering all 40
-rubric points, with dependencies recorded so you can see what is unblocked right now.
-
-Priority is derived from points at risk, not preference: P0 blocks a rubric row worth 3 or more
-points or blocks someone else's work, P1 is a smaller row or degraded evidence, P2 is quality, P3 is
-optional.
-
-Every ticket is mirrored to a [GitHub issue](https://github.com/TDuong04/A3_TDuong/issues), labelled
-by priority, type and area, with dependencies cross-linked. The ticket files remain the source of
-truth; the issues exist for whoever prefers the web UI.
-
-To raise, update or close a ticket, copy `TEMPLATE.md`, keep every frontmatter field, append to the
-ticket's `## Log`, then run:
-
-```bash
-python scripts/sync_tickets.py            # regenerate the board
-python scripts/sync_tickets.py --github   # also open issues for any new tickets
-```
-
-The script never re-creates an issue for a ticket that already has one, so it is safe to re-run.
-
-Closing a ticket requires its acceptance criteria to actually be met. If they are not, say what is
-outstanding and leave it open.
-
-## Working rules
-
-**Never edit `gridworld/constants.py` or `arena/constants.py`.** They encode values fixed by the
-brief, the tests guard them, and altering rewards or mechanics is explicitly forbidden.
-
-**No parameters in code.** Episodes, alpha, gamma, epsilon bounds and every arena hyperparameter
-belong in `config/*.yaml`. Config-driven epsilon decay is a graded criterion.
-
-**Never render inside `step()`.** Simulation files must not import pygame at all. Training runs
-headless; only the eval scripts open a window.
-
-**Run `pytest` before you push.**
-
-**The environment is frozen.** Both agents in `models/` and every table in `results/` were measured
-against the current mechanics. A mechanic or reward change now invalidates all of it and costs a
-retrain plus a re-measure.
-
-## Build order
-
-The environment comes before the agent, always. A bug shipped into training costs an hour to
-discover and looks exactly like a hyperparameter problem while you are discovering it.
-
-1. ~~Gridworld env + renderer, playable by hand.~~ **Done** — rubric row A.
-2. ~~Q-learning on level 0, then SARSA on level 1. Levels 2–3, monsters on 4–5, intrinsic reward on 6.~~ **Done** — rows B, C, D, F.
-3. ~~Arena entities + renderer, playable by hand with the keyboard.~~ **Done** — row G.
-4. ~~Wrap in the Gym API.~~ **Done** — row H. Validated (observation ranges, seeded
-   reproducibility, termination) before training.
-5. ~~Train style 2 (direct) first, then style 1.~~ **Done** — row I, both models in `models/`.
-6. ~~Hyperparameter sweep, then full-budget runs on the winner.~~ **Done** — row J3.
-7. **Report and video — the substantive work left, and 7.5 points plus creativity's 5.** `report/`
-   is still empty. Tickets [A3-014](docs/tickets/A3-014-write-the-report.md),
-   [A3-015](docs/tickets/A3-015-record-and-edit-the-video-demonstration.md),
-   [A3-017](docs/tickets/A3-017-decide-ownership-and-fill-in-the.md),
-   [A3-018](docs/tickets/A3-018-ship-creativity-features-beyond-the-brief.md).
 
 ## Link to video demo
 https://www.youtube.com/watch?v=-9gbR6shESE 
