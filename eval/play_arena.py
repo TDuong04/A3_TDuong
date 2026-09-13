@@ -467,36 +467,48 @@ def format_comparison_markdown(
 # --- human control ----------------------------------------------------------------------------
 
 
-def human_action(keys, style: str) -> int:
+def human_action(keys, style: str, frame: int = 0) -> int:
     """Map the held keys to an action index for this control style.
 
     Held state rather than key events: you hold thrust in a real-time game, you do not tap it, and
     reading state leaves the event queue entirely to the renderer.
+
+    `Discrete(5)`/`Discrete(6)` -- fixed by the brief -- allow only one action per `step()`, so
+    holding two keys at once cannot select two actions at once. It used to resolve that with a
+    fixed priority order (SHOOT beats every direction, ROTATE_LEFT beats THRUST, ...), which did
+    not degrade a lower-priority key so much as delete it: holding forward while steering, the
+    ordinary way to fly a thrust ship, never thrust at all for as long as a turn key was also
+    held, and holding SPACE blocked all movement outright. `frame` -- the renderer's own frame
+    counter, sampled at roughly 60Hz same as the agent's action rate -- round-robins across every
+    held key's action instead, so a held combination is expressed within a handful of frames
+    rather than one key permanently starving the rest.
     """
     import pygame
 
     if style == "rotation":
+        held = []
         if keys[pygame.K_SPACE]:
-            return int(RotationAction.SHOOT)
+            held.append(int(RotationAction.SHOOT))
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            return int(RotationAction.ROTATE_LEFT)
+            held.append(int(RotationAction.ROTATE_LEFT))
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            return int(RotationAction.ROTATE_RIGHT)
+            held.append(int(RotationAction.ROTATE_RIGHT))
         if keys[pygame.K_UP] or keys[pygame.K_w]:
-            return int(RotationAction.THRUST)
-        return int(RotationAction.NOOP)
+            held.append(int(RotationAction.THRUST))
+        return held[frame % len(held)] if held else int(RotationAction.NOOP)
 
+    held = []
     if keys[pygame.K_SPACE]:
-        return int(DirectAction.SHOOT)
+        held.append(int(DirectAction.SHOOT))
     if keys[pygame.K_UP] or keys[pygame.K_w]:
-        return int(DirectAction.UP)
+        held.append(int(DirectAction.UP))
     if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-        return int(DirectAction.DOWN)
+        held.append(int(DirectAction.DOWN))
     if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-        return int(DirectAction.LEFT)
+        held.append(int(DirectAction.LEFT))
     if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-        return int(DirectAction.RIGHT)
-    return int(DirectAction.NOOP)
+        held.append(int(DirectAction.RIGHT))
+    return held[frame % len(held)] if held else int(DirectAction.NOOP)
 
 
 def wait_for_start(renderer, style: str, mechanics: bool = False) -> bool:
@@ -626,7 +638,9 @@ def play(
                     raise KeyboardInterrupt
 
                 if human:
-                    action = 0 if headless else human_action(pygame.key.get_pressed(), style)
+                    action = (
+                        0 if headless else human_action(pygame.key.get_pressed(), style, frames)
+                    )
 
                 obs, _, terminated, truncated, info = env.step(action)
                 done = terminated or truncated
