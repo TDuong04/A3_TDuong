@@ -410,3 +410,6 @@ discover and looks exactly like a hyperparameter problem while you are discoveri
    [A3-015](docs/tickets/A3-015-record-and-edit-the-video-demonstration.md),
    [A3-017](docs/tickets/A3-017-decide-ownership-and-fill-in-the.md),
    [A3-018](docs/tickets/A3-018-ship-creativity-features-beyond-the-brief.md).
+
+## Link to video demo
+https://www.youtube.com/watch?v=-9gbR6shESE 
