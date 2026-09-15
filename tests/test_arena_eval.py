@@ -146,6 +146,51 @@ class TestHumanControl:
         assert human_action(keys, "direct") != human_action(keys, "rotation")
 
 
+class TestHumanControlCombinedKeys:
+    """A held key with nothing expressed is not "lower priority", it is unreachable: the natural
+    way to fly a thrust ship is to hold forward while steering, and the natural way to play a
+    shooter is to move and shoot together. `Discrete(5)`/`Discrete(6)` allow only one action per
+    `step()` -- fixed by the brief, not something to work around -- so a held combination is
+    expressed by alternating across frames rather than one key silently starving the rest for as
+    long as both are held (the reported bug: holding forward while turning never thrust at all)."""
+
+    def test_thrust_and_turn_both_get_expressed_across_frames(self):
+        import pygame
+
+        keys = _Keys(pygame.K_UP, pygame.K_LEFT)
+        seen = {human_action(keys, "rotation", frame=f) for f in range(4)}
+        assert seen == {int(RotationAction.THRUST), int(RotationAction.ROTATE_LEFT)}
+
+    def test_shoot_and_thrust_both_get_expressed_across_frames(self):
+        import pygame
+
+        keys = _Keys(pygame.K_UP, pygame.K_SPACE)
+        seen = {human_action(keys, "rotation", frame=f) for f in range(4)}
+        assert seen == {int(RotationAction.THRUST), int(RotationAction.SHOOT)}
+
+    def test_direct_style_also_alternates_between_held_keys(self):
+        import pygame
+
+        keys = _Keys(pygame.K_UP, pygame.K_SPACE)
+        seen = {human_action(keys, "direct", frame=f) for f in range(4)}
+        assert seen == {int(DirectAction.UP), int(DirectAction.SHOOT)}
+
+    def test_a_single_held_key_is_stable_across_frames(self):
+        """No regression for the common case: one key held returns one action every frame, not a
+        spurious alternation with NOOP."""
+        import pygame
+
+        keys = _Keys(pygame.K_UP)
+        assert {human_action(keys, "rotation", frame=f) for f in range(6)} == {
+            int(RotationAction.THRUST)
+        }
+
+    def test_frame_defaults_to_zero_so_existing_single_key_callers_are_unaffected(self):
+        import pygame
+
+        assert human_action(_Keys(pygame.K_LEFT), "rotation") == int(RotationAction.ROTATE_LEFT)
+
+
 class TestPlayHumanMode:
     """`play(..., human=True)` used to crash on its very first frame.
 
